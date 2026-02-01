@@ -1,0 +1,148 @@
+{
+  "pokemon": [
+    {
+      "id": 1,
+      "form_id": 0,
+      "shiny": false,
+      "file_path": "bulbasaur.png"
+    },
+    {
+      "id": 1,
+      "form_id": 0,
+      "shiny": true,
+      "file_path": "bulbasaur_shiny.png"
+    },
+    {
+      "id": 4,
+      "form_id": 0,
+      "shiny": false,
+      "file_path": "charmander.png"
+    },
+    {
+      "id": 4,
+      "form_id": 0,
+      "shiny": true,
+      "file_path": "charmander_shiny.png"
+    },
+    {
+      "id": 7,
+      "form_id": 0,
+      "shiny": false,
+      "file_path": "squirtle.png"
+    },
+    {
+      "id": 7,
+      "form_id": 0,
+      "shiny": true,
+      "file_path": "squirtle_shiny.png"
+    },
+    {
+      "id": 25,
+      "form_id": 0,
+      "shiny": false,
+      "file_path": "pikachu.png"
+    },
+    {
+      "id": 25,
+      "form_id": 0,
+      "shiny": true,
+      "file_path": "pikachu_shiny.png"
+    },
+    {
+      "id": 150,
+      "form_id": 0,
+      "shiny": false,
+      "file_path": "mewtwo.png"
+    },
+    {
+      "id": 150,
+      "form_id": 0,
+      "shiny": true,
+      "file_path": "mewtwo_shiny.png"
+    },
+    {
+      "id": 151,
+      "form_id": 0,
+      "shiny": false,
+      "file_path": "mew.png"
+    },
+    {
+      "id": 151,
+      "form_id": 0,
+      "shiny": true,
+      "file_path": "mew_shiny.png"
+    }
+  ],
+  "games": [
+    {
+      "name": "Pokémon: Let's Go Pikachu",
+      "title_id": "010003F003A34000",
+      "icon_path": "romfs:/gfx/data/game_icons/lg_pikachu_icon.jpg",
+      "category": "console",
+      "main_save_file": "savedata.bin"
+    },
+    {
+      "name": "Pokémon: Let's Go Eevee",
+      "title_id": "0100187003A36000",
+      "icon_path": "romfs:/gfx/data/game_icons/lg_eevee_icon.jpg",
+      "category": "console",
+      "main_save_file": "savedata.bin"
+    },
+    {
+      "name": "Pokémon Sword",
+      "title_id": "0100ABF008968000",
+      "icon_path": "romfs:/gfx/data/game_icons/sword_icon.jpg",
+      "category": "console",
+      "main_save_file": "main"
+    },
+    {
+      "name": "Pokémon Shield",
+      "title_id": "01008DB008C2C000",
+      "icon_path": "romfs:/gfx/data/game_icons/shield_icon.jpg",
+      "category": "console",
+      "main_save_file": "main"
+    },
+    {
+      "name": "Pokémon Brilliant Diamond",
+      "title_id": "0100000011D90000",
+      "icon_path": "romfs:/gfx/data/game_icons/brilliant_diamond_icon.jpg",
+      "category": "console",
+      "main_save_file": "SaveData.bin"
+    },
+    {
+      "name": "Pokémon Shining Pearl",
+      "title_id": "010018E011D92000",
+      "icon_path": "romfs:/gfx/data/game_icons/shining_pearl_icon.jpg",
+      "category": "console",
+      "main_save_file": "SaveData.bin"
+    },
+    {
+      "name": "Pokémon Scarlet",
+      "title_id": "0100A3D008C5C000",
+      "icon_path": "romfs:/gfx/data/game_icons/scarlet_icon.jpg",
+      "category": "console",
+      "main_save_file": "main"
+    },
+    {
+      "name": "Pokémon Violet",
+      "title_id": "01008F6008C5E000",
+      "icon_path": "romfs:/gfx/data/game_icons/violet_icon.jpg",
+      "category": "console",
+      "main_save_file": "main"
+    },
+    {
+      "name": "Pokémon Legends: Arceus",
+      "title_id": "01001F5010DFA000",
+      "icon_path": "romfs:/gfx/data/game_icons/l_arceus_icon.jpg",
+      "category": "console",
+      "main_save_file": "main"
+    },
+    {
+      "name": "Pokémon Legends: Z-A",
+      "title_id": "0100F43008C44000",
+      "icon_path": "romfs:/gfx/data/game_icons/l_za_icon.jpg",
+      "category": "console",
+      "main_save_file": "main"
+    }
+  ]
+}
