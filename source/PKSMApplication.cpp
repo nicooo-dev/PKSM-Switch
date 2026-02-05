@@ -199,6 +199,11 @@ void PKSMApplication::ShowMainMenu() {
     this->LoadLayout(this->mainMenu);
 }
 
+void PKSMApplication::ShowSettingsScreen() {
+    LOG_DEBUG("Switching to settings screen");
+    this->LoadLayout(this->settingsScreen);
+}
+
 void PKSMApplication::ShowTitleLoadScreen() {
     LOG_DEBUG("Switching to title load screen");
     this->LoadLayout(this->titleLoadScreen);
@@ -207,6 +212,11 @@ void PKSMApplication::ShowTitleLoadScreen() {
 void PKSMApplication::ShowStorageScreen() {
     LOG_DEBUG("Switching to storage screen");
     this->LoadLayout(this->storageScreen);
+}
+
+void PKSMApplication::ShowBagScreen() {
+    LOG_DEBUG("Switching to bag screen");
+    this->LoadLayout(this->bagScreen);
 }
 
 void PKSMApplication::OnSaveSelected(pksm::titles::Title::Ref title, pksm::saves::Save::Ref save) {
@@ -245,9 +255,9 @@ void PKSMApplication::OnLoad() {
             {pksm::ui::MenuButtonType::Storage, [this]() { this->ShowStorageScreen(); }},
             {pksm::ui::MenuButtonType::Editor, [this]() { LOG_DEBUG("Editor button pressed (not implemented)"); }},
             {pksm::ui::MenuButtonType::Events, [this]() { LOG_DEBUG("Events button pressed (not implemented)"); }},
-            {pksm::ui::MenuButtonType::Bag, [this]() { LOG_DEBUG("Bag button pressed (not implemented)"); }},
+            {pksm::ui::MenuButtonType::Bag, [this]() { this->ShowBagScreen(); }},
             {pksm::ui::MenuButtonType::Scripts, [this]() { LOG_DEBUG("Scripts button pressed (not implemented)"); }},
-            {pksm::ui::MenuButtonType::Settings, [this]() { LOG_DEBUG("Settings button pressed (not implemented)"); }}
+            {pksm::ui::MenuButtonType::Settings, [this]() { this->ShowSettingsScreen(); }}
         };
 
         // Create startup screen
@@ -275,6 +285,22 @@ void PKSMApplication::OnLoad() {
             [this]() { this->EndOverlay(); },
             saveDataAccessor,  // Pass the save data accessor
             boxDataProvider  // Pass the box data provider
+        );
+
+        // Create bag screen
+        LOG_DEBUG("Creating bag screen...");
+        bagScreen = pksm::layout::BagScreen::New(
+            [this]() { this->ShowMainMenu(); },  // Back handler goes to main menu
+            [this](pu::ui::Overlay::Ref overlay) { this->StartOverlay(overlay); },
+            [this]() { this->EndOverlay(); }
+        );
+
+        // Create settings screen
+        LOG_DEBUG("Creating settings screen...");
+        settingsScreen = pksm::layout::SettingsScreen::New(
+            [this]() { this->ShowMainMenu(); },  // Back handler goes to main menu
+            [this](pu::ui::Overlay::Ref overlay) { this->StartOverlay(overlay); },
+            [this]() { this->EndOverlay(); }
         );
 
         // Register for save data changes in both MainMenu and StorageScreen

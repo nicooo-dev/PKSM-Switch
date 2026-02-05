@@ -11,6 +11,7 @@ StartupScreen::StartupScreen(
     std::function<void()> onHideOverlay
 ) : BaseLayout(onShowOverlay, onHideOverlay), onTimeout(onTimeout), completed(false) {
     
+    // Set background color
     this->SetBackgroundColor(pu::ui::Color(20, 20, 30, 255));
 
     // Create PKSM logo (using FocusableImage like other screens)
@@ -25,23 +26,21 @@ StartupScreen::StartupScreen(
         logoImage = nullptr;
     }
 
-    // Create title text (following the same pattern as other screens)
     titleText = pu::ui::elm::TextBlock::New(0, TEXT_Y, "PKSM - Pokémon Save Manager");
     titleText->SetColor(pksm::ui::global::TEXT_WHITE);
     titleText->SetFont(pksm::ui::global::MakeHeavyFontName(pksm::ui::global::FONT_SIZE_TITLE));
+    titleText->SetHorizontalAlign(pu::ui::elm::HorizontalAlign::Center);
 
-    // Create loading text
-    loadingText = pu::ui::elm::TextBlock::New(0, TEXT_Y + 40, "Loading...");
+    loadingText = pu::ui::elm::TextBlock::New(0, LOADING_TEXT_Y, "Loading...");
     loadingText->SetColor(pksm::ui::global::TEXT_WHITE);
-    loadingText->SetFont(pksm::ui::global::MakeMediumFontName(pksm::ui::global::FONT_SIZE_ACCOUNT_NAME));
+    loadingText->SetFont(pksm::ui::global::MakeHeavyFontName(pksm::ui::global::FONT_SIZE_BUTTON));  // Bigger font
+    loadingText->SetHorizontalAlign(pu::ui::elm::HorizontalAlign::Center);
 
-    // Create loading bar background
     loadingBarBackground = pu::ui::elm::Rectangle::New(
         LOADING_BAR_X, LOADING_BAR_Y, LOADING_BAR_WIDTH, LOADING_BAR_HEIGHT,
         pu::ui::Color(60, 60, 80, 255)
     );
 
-    // Create loading bar fill (will be animated)
     loadingBarFill = pu::ui::elm::Rectangle::New(
         LOADING_BAR_X, LOADING_BAR_Y, 0, LOADING_BAR_HEIGHT,
         pu::ui::Color(0, 150, 255, 255)
@@ -56,12 +55,11 @@ StartupScreen::StartupScreen(
     this->Add(loadingBarBackground);
     this->Add(loadingBarFill);
 
-    // Set up input handling for the layout
     this->SetOnInput(
         std::bind(&StartupScreen::OnInput, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3)
     );
 
-    // Start the timer and background thread
+    // start the timer and background thread
     startTime = std::chrono::steady_clock::now();
     timeoutThread = std::thread(&StartupScreen::TimeoutWorker, this);
 }
@@ -75,11 +73,12 @@ StartupScreen::~StartupScreen() {
 }
 
 void StartupScreen::TimeoutWorker() {
+    // sleep for the display duration
     std::this_thread::sleep_for(std::chrono::milliseconds(DISPLAY_DURATION_MS));
     
-    // Check if we haven't already completed
+    // check if we haven't already completed
     if (!completed.exchange(true)) {
-        // Call the timeout callback on the main thread
+        // call the timeout callback on the main thread
         if (onTimeout) {
             onTimeout();
         }
@@ -87,7 +86,7 @@ void StartupScreen::TimeoutWorker() {
 }
 
 void StartupScreen::OnHelpOverlayShown() {
-    // Disable UI elements when help overlay is shown
+    // disable UI elements when help overlay is shown
     if (logoImage) logoImage->SetVisible(false);
     titleText->SetVisible(false);
     loadingText->SetVisible(false);
@@ -96,7 +95,7 @@ void StartupScreen::OnHelpOverlayShown() {
 }
 
 void StartupScreen::OnHelpOverlayHidden() {
-    // Re-enable UI elements when help overlay is hidden
+    // re-enable UI elements when help overlay is hidden
     if (logoImage) logoImage->SetVisible(true);
     titleText->SetVisible(true);
     loadingText->SetVisible(true);
@@ -107,7 +106,7 @@ void StartupScreen::OnHelpOverlayHidden() {
 void StartupScreen::OnInput(u64 down, u64 up, u64 held) {
     UpdateLoadingAnimation();
     
-    // User can skip the startup screen by pressing A
+    // allow user to skip the startup screen by pressing A
     if (down & HidNpadButton_A && !completed.exchange(true)) {
         if (onTimeout) {
             onTimeout();
@@ -121,7 +120,7 @@ void StartupScreen::UpdateLoadingAnimation() {
     auto currentTime = std::chrono::steady_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime).count();
     
-    // Update loading bar animation
+    // update loading bar animation
     float progress = std::min(static_cast<float>(elapsed) / DISPLAY_DURATION_MS, 1.0f);
     loadingBarFill->SetWidth(static_cast<u32>(LOADING_BAR_WIDTH * progress));
 }

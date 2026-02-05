@@ -6,7 +6,9 @@
 
 #include "data/AccountManager.hpp"
 #include "data/providers/interfaces/IBoxDataProvider.hpp"
+#include "gui/screens/bag-screen/BagScreen.hpp"
 #include "gui/screens/main-menu/MainMenu.hpp"
+#include "gui/screens/settings-screen/SettingsScreen.hpp"
 #include "gui/screens/startup-screen/StartupScreen.hpp"
 #include "gui/screens/storage-screen/StorageScreen.hpp"
 #include "gui/screens/title-load-screen/TitleLoadScreen.hpp"
@@ -16,8 +18,10 @@ namespace pksm {
 class PKSMApplication : public pu::ui::Application {
 private:
     // Screens
+    pksm::layout::BagScreen::Ref bagScreen;
     pksm::layout::StartupScreen::Ref startupScreen;
     pksm::layout::MainMenu::Ref mainMenu;
+    pksm::layout::SettingsScreen::Ref settingsScreen;
     pksm::layout::TitleLoadScreen::Ref titleLoadScreen;
     pksm::layout::StorageScreen::Ref storageScreen;
 
@@ -41,8 +45,10 @@ private:
     static void RegisterAdditionalFonts();
 
     // Navigation methods
+    void ShowBagScreen();
     void ShowStartupScreen();
     void ShowMainMenu();
+    void ShowSettingsScreen();
     void ShowTitleLoadScreen();
     void ShowStorageScreen();
 

@@ -1,0 +1,6 @@
+# PKSM builds
+PKSM.elf
+PKSM.nacp
+
+# Build Folder
+/build/

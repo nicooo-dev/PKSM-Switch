@@ -15,9 +15,10 @@ class StartupScreen : public BaseLayout {
 private:
     static constexpr u32 DISPLAY_DURATION_MS = 5000;  // 5 seconds
     static constexpr u32 LOGO_SIZE = 256;
-    static constexpr u32 LOGO_Y = 200;
-    static constexpr u32 TEXT_Y = LOGO_Y + LOGO_SIZE + 50;
-    static constexpr u32 LOADING_BAR_Y = TEXT_Y + 80;
+    static constexpr u32 LOGO_Y = 120;
+    static constexpr u32 TEXT_Y = LOGO_Y + LOGO_SIZE + 60;
+    static constexpr u32 LOADING_TEXT_Y = TEXT_Y + 50;
+    static constexpr u32 LOADING_BAR_Y = LOADING_TEXT_Y + 60;
     static constexpr u32 LOADING_BAR_WIDTH = 600;
     static constexpr u32 LOADING_BAR_HEIGHT = 8;
     static constexpr u32 LOADING_BAR_X = (1280 - LOADING_BAR_WIDTH) / 2;

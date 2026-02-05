@@ -38,7 +38,7 @@ void TitleDataProvider::GetInstalledApplicationIds(std::set<u64>& out_ids) const
         }
     }
 
-    // cleanup
+    // Cleanup
 
     std::free(records);
     nsExit();
@@ -78,7 +78,7 @@ TitleDataProvider::TitleDataProvider()
             0x00175E00
         );
 
-        // mock emulator titles (for now)
+        // Mock emulator titles
         mockEmulatorTitles.clear();
         mockEmulatorTitles.push_back(std::make_shared<Title>("Pokémon Sun", "romfs:/gfx/mock/emulator/sun_menu_icon.jpg", 0x00180014));
         mockEmulatorTitles.push_back(std::make_shared<Title>("Pokémon Ultra Moon", "romfs:/gfx/mock/emulator/ultra_moon_menu_icon.jpg", 0x00180015));

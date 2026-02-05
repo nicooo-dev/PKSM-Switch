@@ -47,6 +47,35 @@ MainMenu::MainMenu(
     menuGrid = pksm::ui::MenuButtonGrid::New(menuGridX, MENU_GRID_TOP_MARGIN, menuGridWidth);
     this->Add(menuGrid);
 
+    const std::string versionString = std::string("PKSM Switch v") + PKSM_VERSION;
+    
+    // Load the textbox background image
+    pu::sdl2::Texture versionimageTexture = pu::ui::render::LoadImage("romfs:/gfx/ui/textbox_blue.png");
+    auto versionimageHandle = pu::sdl2::TextureHandle::New(versionimageTexture);
+    
+    const pu::i32 VERSION_IMAGE_WIDTH = 750;
+    const pu::i32 VERSION_IMAGE_HEIGHT = 85;
+    
+    versionBackground = pu::ui::elm::Image::New(
+        GetWidth() - VERSION_IMAGE_WIDTH - VERSION_IMAGE_RIGHT_MARGIN,
+        VERSION_IMAGE_TOP_MARGIN,
+        versionimageHandle
+    );
+    
+    versionBackground->SetWidth(VERSION_IMAGE_WIDTH);
+    versionBackground->SetHeight(VERSION_IMAGE_HEIGHT);
+    this->Add(versionBackground);
+    
+    versionText = pu::ui::elm::TextBlock::New(
+        GetWidth() - VERSION_IMAGE_WIDTH + VERSION_IMAGE_PADDING,
+        VERSION_IMAGE_TOP_MARGIN + (VERSION_IMAGE_HEIGHT / 2) - 14,
+        versionString
+    );
+
+    versionText->SetColor(pu::ui::Color(255, 255, 255, 255));
+    versionText->SetFont(pksm::ui::global::MakeHeavyFontName(35));
+    this->Add(versionText);
+
     // Register navigation callbacks for the menu buttons
     RegisterNavigationCallbacks();
 
@@ -141,11 +170,17 @@ std::vector<pksm::ui::HelpItem> MainMenu::GetHelpOverlayItems() const {
 void MainMenu::OnHelpOverlayShown() {
     LOG_DEBUG("Help overlay shown, disabling UI elements");
     menuGrid->SetDisabled(true);
+    trainerInfo->SetVisible(false);
+    versionBackground->SetVisible(false);
+    versionText->SetVisible(false);
 }
 
 void MainMenu::OnHelpOverlayHidden() {
     LOG_DEBUG("Help overlay hidden, re-enabling UI elements");
     menuGrid->SetDisabled(false);
+    trainerInfo->SetVisible(true);
+    versionBackground->SetVisible(true);
+    versionText->SetVisible(true);
 }
 
 }  // namespace pksm::layout
