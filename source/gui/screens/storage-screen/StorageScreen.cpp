@@ -24,6 +24,11 @@ StorageScreen::StorageScreen(
     background = ui::AnimatedBackground::New();
     this->Add(background);
 
+    headerText = pu::ui::elm::TextBlock::New(SIDE_MARGIN, HEADER_TOP_MARGIN, "Storage");
+    headerText->SetColor(pksm::ui::global::TEXT_WHITE);
+    headerText->SetFont(pksm::ui::global::MakeHeavyFontName(pksm::ui::global::FONT_SIZE_TITLE));
+    this->Add(headerText);
+
     // Initialize focus management
     InitializeFocusManagement();
 

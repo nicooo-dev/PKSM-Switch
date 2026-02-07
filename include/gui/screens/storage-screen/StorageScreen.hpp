@@ -35,6 +35,7 @@ public:
     void LoadBoxData();
 
 private:
+    pu::ui::elm::TextBlock::Ref headerText;
     pu::ui::elm::Element::Ref background;
     pu::ui::Color bgColor = pu::ui::Color(5, 171, 49, 255);
     std::function<void()> onBack;
@@ -43,6 +44,8 @@ private:
     IBoxDataProvider::Ref boxDataProvider;
 
     // Layout constants
+    static constexpr pu::i32 HEADER_TOP_MARGIN = 35;
+    static constexpr pu::i32 SIDE_MARGIN = 70;
     static constexpr pu::i32 BOX_GRID_SIDE_MARGIN = 80;  // Margin from left edge
     static constexpr pu::i32 BOX_GRID_TOP_MARGIN = 120;  // Margin from top
     static constexpr pu::i32 BOX_ITEM_SIZE = 124;  // Size of each box item
