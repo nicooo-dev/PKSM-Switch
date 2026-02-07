@@ -33,7 +33,7 @@ StorageScreen::StorageScreen(
     InitializeFocusManagement();
 
     // Initialize BoxGrid
-    InitializePokemonBox();
+    InitializePokemonBoxes();
 
     // Initialize help footer
     InitializeHelpFooter();
@@ -70,51 +70,82 @@ void StorageScreen::InitializeFocusManagement() {
     // Initialize focus managers
     storageScreenFocusManager = pksm::input::FocusManager::New("StorageScreen Manager");
     storageScreenFocusManager->SetActive(true);  // since this is the root manager
-    pokemonBoxFocusManager = pksm::input::FocusManager::New("PokemonBox Manager");
+    pokemonBankBoxFocusManager = pksm::input::FocusManager::New("PokemonBankBox Manager"); // bank box focus manager
+    pokemonSaveBoxFocusManager = pksm::input::FocusManager::New("PokemonSaveBox Manager"); // save box focus manager
 
     // Initialize selection managers
     storageScreenSelectionManager = pksm::input::SelectionManager::New("StorageScreen Manager");
     storageScreenSelectionManager->SetActive(true);  // since this is the root manager
-    pokemonBoxSelectionManager = pksm::input::SelectionManager::New("PokemonBox Manager");
+    pokemonBankBoxSelectionManager = pksm::input::SelectionManager::New("PokemonBankBox Manager"); // bank box selection manager
+    pokemonSaveBoxSelectionManager = pksm::input::SelectionManager::New("PokemonSaveBox Manager"); // save box selection manager
 
-    storageScreenFocusManager->RegisterChildManager(pokemonBoxFocusManager);
-    storageScreenSelectionManager->RegisterChildManager(pokemonBoxSelectionManager);
+    storageScreenFocusManager->RegisterChildManager(pokemonBankBoxFocusManager); // register bank box focus manager
+    storageScreenFocusManager->RegisterChildManager(pokemonSaveBoxFocusManager); // register save box focus manager
+    storageScreenSelectionManager->RegisterChildManager(pokemonBankBoxSelectionManager); // register bank box selection manager
+    storageScreenSelectionManager->RegisterChildManager(pokemonSaveBoxSelectionManager); // register save box selection manager
 
     // Set up directional input handlers
-    pokemonBoxDirectionalHandler.SetOnMoveUp([this]() {
-        // Handle up navigation from box grid if needed
+    pokemonBoxDirectionalHandler.SetOnMoveLeft([this]() {
+        if (activeBox == ActiveBox::Save) {
+            SetActiveBox(ActiveBox::Bank);
+        }
+    });
+    pokemonBoxDirectionalHandler.SetOnMoveRight([this]() {
+        if (activeBox == ActiveBox::Bank) {
+            SetActiveBox(ActiveBox::Save);
+        }
     });
 
     LOG_DEBUG("Focus and selection management initialization complete");
 }
 
-void StorageScreen::InitializePokemonBox() {
-    LOG_DEBUG("Initializing PokemonBox...");
+void StorageScreen::InitializePokemonBoxes() {
+    LOG_DEBUG("Initializing PokemonBoxes...");
 
-    // Create the PokemonBox with the same parameters as we would BoxGrid
-    pokemonBox = pksm::ui::PokemonBox::New(
+    pokemonBankBox = pksm::ui::PokemonBox::New(
         BOX_GRID_SIDE_MARGIN,
         BOX_GRID_TOP_MARGIN,
         BOX_ITEM_SIZE,
-        pokemonBoxFocusManager,
-        pokemonBoxSelectionManager
+        pokemonBankBoxFocusManager,
+        pokemonBankBoxSelectionManager
     );
-    this->Add(pokemonBox);
-    pokemonBox->SetName("PokemonBox Element");
-    pokemonBox->EstablishOwningRelationship();
+    this->Add(pokemonBankBox);
+    pokemonBankBox->SetName("PokemonBankBox Element");
+    pokemonBankBox->EstablishOwningRelationship();
 
-    // Load box data for the current save
+    pokemonSaveBox = pksm::ui::PokemonBox::New(
+        SAVE_BOX_SIDE_MARGIN,
+        BOX_GRID_TOP_MARGIN,
+        BOX_ITEM_SIZE,
+        pokemonSaveBoxFocusManager,
+        pokemonSaveBoxSelectionManager
+    );
+    this->Add(pokemonSaveBox);
+    pokemonSaveBox->SetName("PokemonSaveBox Element");
+    pokemonSaveBox->EstablishOwningRelationship();
+
+    // Initialize bank box with placeholder data
+    pokemonBankBox->SetBoxCount(32);
+    for (int i = 0; i < 32; i++) {
+        pksm::ui::BoxData boxData;
+        boxData.name = "Bank Box " + std::to_string(i + 1);
+        pokemonBankBox->SetBoxData(i, boxData);
+    }
+    pokemonBankBox->SetCurrentBox(0);
+
+    // Load box data for the current save into the save box
     LoadBoxData();
 
-    // Set up selection changed callback
-    pokemonBox->SetOnSelectionChanged([this](int boxIndex, int slotIndex) {
-        LOG_DEBUG("Box selection changed: Box " + std::to_string(boxIndex) + ", Slot " + std::to_string(slotIndex));
+    pokemonBankBox->SetOnSelectionChanged([this](int boxIndex, int slotIndex) {
+        LOG_DEBUG("Bank box selection changed: Box " + std::to_string(boxIndex) + ", Slot " + std::to_string(slotIndex));
+    });
+    pokemonSaveBox->SetOnSelectionChanged([this](int boxIndex, int slotIndex) {
+        LOG_DEBUG("Save box selection changed: Box " + std::to_string(boxIndex) + ", Slot " + std::to_string(slotIndex));
     });
 
-    // Set initial focus
-    pokemonBox->RequestFocus();
+    SetActiveBox(ActiveBox::Save);
 
-    LOG_DEBUG("PokemonBox initialization complete");
+    LOG_DEBUG("PokemonBoxes initialization complete");
 }
 
 void StorageScreen::LoadBoxData() {
@@ -124,9 +155,9 @@ void StorageScreen::LoadBoxData() {
     if (!currentSave) {
         LOG_DEBUG("No save data available, using fallback box data");
         // Set a default box count if no save data available
-        pokemonBox->SetBoxCount(1);
+        pokemonSaveBox->SetBoxCount(1);
         // Start at box 0
-        pokemonBox->SetCurrentBox(0);
+        pokemonSaveBox->SetCurrentBox(0);
         LOG_DEBUG("Fallback box data loaded");
         return;
     }
@@ -134,16 +165,16 @@ void StorageScreen::LoadBoxData() {
     // Get box count from the provider
     size_t boxCount = boxDataProvider->GetBoxCount(currentSave);
     LOG_DEBUG("Setting box count to " + std::to_string(boxCount));
-    pokemonBox->SetBoxCount(boxCount);
+    pokemonSaveBox->SetBoxCount(boxCount);
 
     // Load all boxes at once to ensure the box data provider knows about them
     for (size_t i = 0; i < boxCount; ++i) {
         auto boxData = boxDataProvider->GetBoxData(currentSave, i);
-        pokemonBox->SetBoxData(i, boxData);
+        pokemonSaveBox->SetBoxData(i, boxData);
     }
 
-    // Start at box 0
-    pokemonBox->SetCurrentBox(0);
+    // start at box 0
+    pokemonSaveBox->SetCurrentBox(0);
 
     LOG_DEBUG("Box data loaded successfully");
 }
@@ -151,13 +182,31 @@ void StorageScreen::LoadBoxData() {
 StorageScreen::~StorageScreen() = default;
 
 void StorageScreen::OnInput(u64 down, u64 up, u64 held) {
-    // First handle help-related input
     if (HandleHelpInput(down)) {
-        return;  // Input was handled by help system
+        return;
+    }
+
+    static constexpr int ITEMS_PER_ROW = 6;
+    bool shouldHandleBoxSwitch = false;
+
+    if (activeBox == ActiveBox::Save && pokemonSaveBox) {
+        const int slotIndex = pokemonSaveBox->GetSelectedSlot();
+        if (slotIndex >= 0) {
+            shouldHandleBoxSwitch = (slotIndex % ITEMS_PER_ROW) == 0;
+        }
+    } else if (activeBox == ActiveBox::Bank && pokemonBankBox) {
+        const int slotIndex = pokemonBankBox->GetSelectedSlot();
+        if (slotIndex >= 0) {
+            shouldHandleBoxSwitch = (slotIndex % ITEMS_PER_ROW) == (ITEMS_PER_ROW - 1);
+        }
+    }
+
+    // process directional inputs for cross-box switching at the box edge
+    if (shouldHandleBoxSwitch) {
+        pokemonBoxDirectionalHandler.HandleInput(down, held);
     }
 
     // Process button inputs
-    pokemonBoxDirectionalHandler.HandleInput(down, held);
     buttonHandler.HandleInput(down, up, held);
 }
 
@@ -174,12 +223,54 @@ std::vector<pksm::ui::HelpItem> StorageScreen::GetHelpOverlayItems() const {
 
 void StorageScreen::OnHelpOverlayShown() {
     LOG_DEBUG("Help overlay shown, disabling UI elements");
-    pokemonBox->SetDisabled(true);
+    if (pokemonBankBox) {
+        pokemonBankBox->SetDisabled(true);
+    }
+    if (pokemonSaveBox) {
+        pokemonSaveBox->SetDisabled(true);
+    }
 }
 
 void StorageScreen::OnHelpOverlayHidden() {
     LOG_DEBUG("Help overlay hidden, re-enabling UI elements");
-    pokemonBox->SetDisabled(false);
+    SetActiveBox(activeBox);
+}
+
+void StorageScreen::SetActiveBox(ActiveBox box) {
+    static constexpr int ITEMS_PER_ROW = 6;
+
+    const ActiveBox previousBox = activeBox;
+    int previousSelectedSlot = -1;
+    if (previousBox == ActiveBox::Bank && pokemonBankBox) {
+        previousSelectedSlot = pokemonBankBox->GetSelectedSlot();
+    } else if (previousBox == ActiveBox::Save && pokemonSaveBox) {
+        previousSelectedSlot = pokemonSaveBox->GetSelectedSlot();
+    }
+
+    activeBox = box;
+
+    if (pokemonBankBox) {
+        pokemonBankBox->SetDisabled(activeBox != ActiveBox::Bank);
+    }
+    if (pokemonSaveBox) {
+        pokemonSaveBox->SetDisabled(activeBox != ActiveBox::Save);
+    }
+
+    if (activeBox == ActiveBox::Bank && pokemonBankBox) {
+        if (previousSelectedSlot >= 0) {
+            const int row = previousSelectedSlot / ITEMS_PER_ROW;
+            pokemonBankBox->SetSelectedSlot(row * ITEMS_PER_ROW + (ITEMS_PER_ROW - 1));
+        }
+        pokemonBankBox->RequestFocus();
+    } else if (activeBox == ActiveBox::Save && pokemonSaveBox) {
+        if (previousSelectedSlot >= 0) {
+            const int row = previousSelectedSlot / ITEMS_PER_ROW;
+            pokemonSaveBox->SetSelectedSlot(row * ITEMS_PER_ROW);
+        }
+        pokemonSaveBox->RequestFocus();
+    }
+
+    pokemonBoxDirectionalHandler.ClearState();
 }
 
 }  // namespace pksm::layout

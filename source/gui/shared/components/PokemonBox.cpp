@@ -555,6 +555,23 @@ int PokemonBox::GetSelectedSlot() const {
     return static_cast<int>(boxGrid->GetSelectedIndex());
 }
 
+void PokemonBox::SetSelectedSlot(int slotIndex) {
+    if (!boxGrid) {
+        return;
+    }
+
+    if (slotIndex < 0) {
+        return;
+    }
+
+    const size_t index = static_cast<size_t>(slotIndex);
+    if (index >= boxGrid->GetItemCount()) {
+        return;
+    }
+
+    boxGrid->SetSelectedIndex(index);
+}
+
 void PokemonBox::SetDisabled(bool disabled) {
     this->disabled = disabled;
 }

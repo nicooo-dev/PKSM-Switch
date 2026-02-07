@@ -144,6 +144,7 @@ public:
 
     // Current selection
     int GetSelectedSlot() const;
+    void SetSelectedSlot(int slotIndex);
 
     // Enable/disable
     void SetDisabled(bool disabled);
