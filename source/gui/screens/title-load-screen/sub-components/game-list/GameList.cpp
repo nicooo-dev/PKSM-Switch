@@ -22,6 +22,7 @@ pksm::ui::GameList::GameList(
     const pu::i32 height,
     input::FocusManager::Ref parentFocusManager,
     ITitleDataProvider::Ref titleProvider,
+    ISaveDataProvider::Ref saveProvider,
     const AccountUid& initialUserId
 )
   : Element(),
@@ -33,6 +34,7 @@ pksm::ui::GameList::GameList(
     width(width),
     height(height),
     titleProvider(titleProvider),
+    saveProvider(saveProvider),
     currentGameListIndex(0),
     currentUserId(initialUserId) {
     LOG_DEBUG("Initializing GameList component...");
@@ -300,7 +302,6 @@ void pksm::ui::GameList::SetFocusManager(std::shared_ptr<input::FocusManager> ma
 }
 
 void pksm::ui::GameList::SwitchToNextGameList(bool forward) {
-    // Hide current game list
     activeGameList->SetVisible(false);
 
     // Calculate next index
@@ -364,14 +365,44 @@ void pksm::ui::GameList::UpdateGameListData() {
         switch (info.type) {
             case GameListType::Console: {
                 std::vector<titles::Title::Ref> consoleTitles;
+
+                auto HasSavesForCurrentUser = [this](const titles::Title::Ref& t) {
+                    if (!this->saveProvider) {
+                        return true;
+                    }
+                    return !this->saveProvider->GetSavesForTitle(t, this->currentUserId).empty();
+                };
+
+                auto IsInstalledTitleId = [](const std::vector<titles::Title::Ref>& installed, const titles::Title::Ref& t) {
+                    if (!t) {
+                        return false;
+                    }
+                    for (const auto& it : installed) {
+                        if (it && it->getTitleId() == t->getTitleId()) {
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+
+                // Get installed titles for current user
+                auto installedTitles = titleProvider->GetInstalledTitles(currentUserId);
+
                 // Add game card title if present
                 auto gameCardTitle = titleProvider->GetGameCardTitle();
                 if (gameCardTitle) {
-                    consoleTitles.push_back(gameCardTitle);
+                    // Only treat as "game card" if it's not already in the installed list
+                    if (!IsInstalledTitleId(installedTitles, gameCardTitle) && HasSavesForCurrentUser(gameCardTitle)) {
+                        consoleTitles.push_back(gameCardTitle);
+                    }
                 }
+
                 // Add installed titles for current user
-                auto installedTitles = titleProvider->GetInstalledTitles(currentUserId);
-                consoleTitles.insert(consoleTitles.end(), installedTitles.begin(), installedTitles.end());
+                for (const auto& t : installedTitles) {
+                    if (HasSavesForCurrentUser(t)) {
+                        consoleTitles.push_back(t);
+                    }
+                }
                 list->SetDataSource(consoleTitles);
                 break;
             }
@@ -393,15 +424,43 @@ void pksm::ui::GameList::UpdateConsoleGameListData() {
             auto& list = gameLists[i];
             std::vector<titles::Title::Ref> consoleTitles;
 
+            auto HasSavesForCurrentUser = [this](const titles::Title::Ref& t) {
+                if (!this->saveProvider) {
+                    return true;
+                }
+                return !this->saveProvider->GetSavesForTitle(t, this->currentUserId).empty();
+            };
+
+            auto IsInstalledTitleId = [](const std::vector<titles::Title::Ref>& installed, const titles::Title::Ref& t) {
+                if (!t) {
+                    return false;
+                }
+                for (const auto& it : installed) {
+                    if (it && it->getTitleId() == t->getTitleId()) {
+                        return true;
+                    }
+                }
+                return false;
+            };
+
+            // Get installed titles for current user
+            auto installedTitles = titleProvider->GetInstalledTitles(currentUserId);
+
             // Add game card title if present
             auto gameCardTitle = titleProvider->GetGameCardTitle();
             if (gameCardTitle) {
-                consoleTitles.push_back(gameCardTitle);
+                // Only treat as "game card" if it's not already in the installed list
+                if (!IsInstalledTitleId(installedTitles, gameCardTitle) && HasSavesForCurrentUser(gameCardTitle)) {
+                    consoleTitles.push_back(gameCardTitle);
+                }
             }
 
             // Add installed titles for current user
-            auto installedTitles = titleProvider->GetInstalledTitles(currentUserId);
-            consoleTitles.insert(consoleTitles.end(), installedTitles.begin(), installedTitles.end());
+            for (const auto& t : installedTitles) {
+                if (HasSavesForCurrentUser(t)) {
+                    consoleTitles.push_back(t);
+                }
+            }
             list->SetDataSource(consoleTitles);
             onSelectionChangedCallback();
             break;

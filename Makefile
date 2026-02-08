@@ -10,7 +10,7 @@ TOPDIR ?= $(CURDIR)
 include $(DEVKITPRO)/libnx/switch_rules
 
 # Add debug build option
-DEBUG ?= 1
+DEBUG ?= 0
 
 #---------------------------------------------------------------------------------
 # TARGET is the name of the output
@@ -63,7 +63,7 @@ VER_MINOR	:= 1
 VER_MICRO	:= 1
 
 APP_TITLE   := PKSM
-APP_AUTHOR  := FlagBrew
+APP_AUTHOR  := FlagBrew, nicooo_dev
 APP_TITLEID := 0100A1B0C0D0E000
 
 APP_VERSION := $(VER_MAJOR).$(VER_MINOR).$(VER_MICRO)

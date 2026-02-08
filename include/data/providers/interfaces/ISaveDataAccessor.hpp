@@ -22,6 +22,9 @@ public:
     // Set a callback for when the save data changes
     virtual void setOnSaveDataChanged(std::function<void(pksm::saves::SaveData::Ref)> callback) = 0;
 
+    // Unmount save device if mounted
+    virtual void unmountSaveDevice() = 0;
+
     // Save any changes to the current save
     virtual bool saveChanges() = 0;
 

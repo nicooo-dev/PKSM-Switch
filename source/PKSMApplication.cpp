@@ -3,7 +3,7 @@
 #include <sstream>
 
 #include "data/providers/mock/MockBoxDataProvider.hpp"
-#include "data/providers/mock/MockSaveDataAccessor.hpp"
+#include "data/providers/SaveDataAccessor.hpp"
 #include "data/providers/SaveDataProvider.hpp"
 #include "data/providers/TitleDataProvider.hpp"
 #include "gui/shared/FontManager.hpp"
@@ -151,7 +151,7 @@ PKSMApplication::Ref PKSMApplication::Initialize() {
         LOG_DEBUG("Creating data providers...");
         auto titleProviderConcrete = std::make_shared<pksm::titles::TitleDataProvider>();
         auto saveProviderConcrete = std::make_shared<SaveDataProvider>(accountManager->GetCurrentAccount());
-        auto saveDataAccessorConcrete = std::make_shared<MockSaveDataAccessor>();
+        auto saveDataAccessorConcrete = std::make_shared<SaveDataAccessor>(accountManager->GetCurrentAccount());
         auto boxDataProviderConcrete = std::make_shared<MockBoxDataProvider>();
 
         // Cast to interface types expected by PKSMApplication
@@ -206,7 +206,18 @@ void PKSMApplication::ShowSettingsScreen() {
 
 void PKSMApplication::ShowTitleLoadScreen() {
     LOG_DEBUG("Switching to title load screen");
+    // unmount any save that may be mounted from previous save load
+    saveDataAccessor->unmountSaveDevice();
     this->LoadLayout(this->titleLoadScreen);
+    // refresh the save list when returning to title load screen
+    if (titleLoadScreen) {
+        try {
+            titleLoadScreen->RefreshSaves();
+            LOG_DEBUG("Save list refreshed after returning to title load screen");
+        } catch (const std::exception& e) {
+            LOG_ERROR("Failed to refresh save list: " + std::string(e.what()));
+        }
+    }
 }
 
 void PKSMApplication::ShowStorageScreen() {
@@ -221,14 +232,18 @@ void PKSMApplication::ShowBagScreen() {
 
 void PKSMApplication::OnSaveSelected(pksm::titles::Title::Ref title, pksm::saves::Save::Ref save) {
     LOG_DEBUG("Save selected: " + save->getName() + " for title: " + title->getName());
-    // Load the mock save data based on the title and save name
-    if (saveDataAccessor->loadSave(title, save->getName())) {
-        LOG_DEBUG("Successfully loaded mock save data");
+    LOG_DEBUG("Title ID: " + std::to_string(title->getTitleId()));
+    LOG_DEBUG("Save path: " + save->getPath());
+    
+    // load the save data using the actual file path
+    if (saveDataAccessor->loadSave(title, save->getPath())) {
+        LOG_DEBUG("Successfully loaded save data");
 
         // Now that the save is loaded, show the main menu
         this->ShowMainMenu();
     } else {
-        LOG_ERROR("Failed to load mock save data");
+        LOG_ERROR("Failed to load save data");
+        // not switching screens if load failed
     }
 }
 

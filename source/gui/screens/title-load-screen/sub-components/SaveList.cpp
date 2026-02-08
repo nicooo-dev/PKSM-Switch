@@ -27,6 +27,12 @@ pu::i32 SaveList::GetHeight() const {
 
 void SaveList::SetDataSource(const std::vector<saves::Save::Ref>& saves) {
     LOG_DEBUG("Setting SaveList data source with " + std::to_string(saves.size()) + " saves");
+    
+    // Log each save being set
+    for (size_t i = 0; i < saves.size(); i++) {
+        LOG_DEBUG("Save " + std::to_string(i) + ": " + saves[i]->getName() + " at " + saves[i]->getPath());
+    }
+    
     this->saves = saves;
 
     // Convert saves to display strings
@@ -34,6 +40,8 @@ void SaveList::SetDataSource(const std::vector<saves::Save::Ref>& saves) {
     for (const auto& save : saves) {
         displayStrings.push_back(save->getName());
     }
+    
+    LOG_DEBUG("Created " + std::to_string(displayStrings.size()) + " display strings");
 
     // Set display strings in base menu
     FocusableMenu::SetDataSource(displayStrings);

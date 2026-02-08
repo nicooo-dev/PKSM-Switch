@@ -82,6 +82,12 @@ private:
     bool focused = false;
     bool selected = false;
     std::function<void()> onSelectionChangedCallback;
+    
+    // preserve selected title when losing/regaining focus
+    titles::Title::Ref lastSelectedTitle;
+
+    bool suppressSelectionChanged = false;
+    u64 suppressedTitleId = 0;
 
     // Position tracking
     pu::i32 x;

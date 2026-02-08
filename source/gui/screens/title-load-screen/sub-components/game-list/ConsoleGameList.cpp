@@ -210,15 +210,34 @@ void pksm::ui::ConsoleGameList::SetFocused(bool focused) {
         this->focused = focused;
         if (!focused) {
             directionalInputHandler.ClearState();
+            lastSelectedTitle = GetSelectedTitle();
         }
-        // Update visual state only, don't request focus
-        if (focused) {
-            // Just update the visual state of the appropriate section
-            if (selectionState == SelectionState::GameCard) {
-                LOG_DEBUG("[ConsoleGameList] Requesting focus on game card image");
-                gameCardImage->ISelectable::RequestFocus();
+        // When regaining focus, restore the previously selected title if available
+        if (focused && lastSelectedTitle) {
+            LOG_DEBUG("[ConsoleGameList] Restoring preserved title: " + lastSelectedTitle->getName());
+
+            suppressSelectionChanged = true;
+            suppressedTitleId = lastSelectedTitle->getTitleId();
+            
+            // Restore selection without querying GameGrid for its internal data source
+            // `titles` includes the game card title at index 0, and installed games start at index 1.
+            const auto preservedTitleId = lastSelectedTitle->getTitleId();
+
+            // If preserved title is the game card title
+            if (!titles.empty() && titles[0] && titles[0]->getTitleId() == preservedTitleId) {
+                selectionState = SelectionState::GameCard;
+                gameCardImage->RequestFocus();
             } else {
-                LOG_DEBUG("[ConsoleGameList] Requesting focus on installed games");
+                // Otherwise search installed titles (titles[1..]) and map to GameGrid index (i - 1)
+                for (size_t i = 1; i < titles.size(); i++) {
+                    if (titles[i] && titles[i]->getTitleId() == preservedTitleId) {
+                        selectionState = SelectionState::InstalledGame;
+                        installedGames->SetSelectedIndex(i - 1);
+                        LOG_DEBUG("[ConsoleGameList] Restored selected index to: " + std::to_string(i - 1));
+                        break;
+                    }
+                }
+
                 installedGames->RequestFocus();
             }
         }
@@ -285,6 +304,27 @@ pksm::titles::Title::Ref pksm::ui::ConsoleGameList::GetSelectedTitle() const {
 
 void pksm::ui::ConsoleGameList::HandleOnSelectionChanged() {
     LOG_DEBUG("[ConsoleGameList] Handling selection changed");
+
+    if (suppressSelectionChanged && lastSelectedTitle) {
+        LOG_DEBUG("[ConsoleGameList] Suppressing selection changed callback after restore");
+        suppressSelectionChanged = false;
+
+        const auto preservedTitleId = lastSelectedTitle->getTitleId();
+        if (!titles.empty() && titles[0] && titles[0]->getTitleId() == preservedTitleId) {
+            selectionState = SelectionState::GameCard;
+        } else {
+            for (size_t i = 1; i < titles.size(); i++) {
+                if (titles[i] && titles[i]->getTitleId() == preservedTitleId) {
+                    selectionState = SelectionState::InstalledGame;
+                    installedGames->SetSelectedIndex(i - 1);
+                    break;
+                }
+            }
+        }
+
+        return;
+    }
+
     if (onSelectionChangedCallback) {
         auto selected = GetSelectedTitle();
         if (selected) {

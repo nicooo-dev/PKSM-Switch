@@ -62,6 +62,7 @@ pksm::layout::TitleLoadScreen::TitleLoadScreen(
         GetHeight() - (HEADER_TOTAL_VERTICAL_SPACE + SAVE_LIST_TOTAL_VERTICAL_SPACE),
         gameListManager,
         titleProvider,
+        saveProvider,
         accountManager.GetCurrentAccount()
     );
     this->gameList->SetName("GameList Element");
@@ -184,6 +185,7 @@ void pksm::layout::TitleLoadScreen::LoadSaves() {
     auto title = GetSelectedTitle();
     if (title) {
         LOG_DEBUG("Loading saves for title: " + title->getName());
+        LOG_DEBUG("Title ID: " + std::to_string(title->getTitleId()));
 
         // Update header text with selected title
         std::string titleText = title->getName();
@@ -200,9 +202,26 @@ void pksm::layout::TitleLoadScreen::LoadSaves() {
         this->headerText->SetY(HEADER_TOP_MARGIN + (HEADER_HEIGHT - textHeight) / 2);
 
         // Update save list with current user
+        LOG_DEBUG("Getting saves for current user");
         auto saves = saveProvider->GetSavesForTitle(title, accountManager.GetCurrentAccount());
         LOG_DEBUG("Found " + std::to_string(saves.size()) + " saves for title");
+        
+        // Log each save found
+        for (size_t i = 0; i < saves.size(); i++) {
+            LOG_DEBUG("Save " + std::to_string(i) + ": " + saves[i]->getName() + " at " + saves[i]->getPath());
+        }
+        
         this->saveList->SetDataSource(saves);
+        LOG_DEBUG("Set save list data source with " + std::to_string(saves.size()) + " items");
+    } else {
+        LOG_DEBUG("No title selected, cannot load saves");
+    }
+}
+
+void pksm::layout::TitleLoadScreen::RefreshSaves() {
+    try {
+        LoadSaves();
+    } catch (const std::exception& e) {
     }
 }
 
@@ -259,6 +278,9 @@ void pksm::layout::TitleLoadScreen::FocusGameSection() {
 
 void pksm::layout::TitleLoadScreen::FocusSaveList() {
     LOG_DEBUG("Focusing save list");
+    if (gameList) {
+        gameList->GetSelectedTitle();
+    }
     this->saveList->RequestFocus();
     UpdateHelpItems(this->saveList);
 }

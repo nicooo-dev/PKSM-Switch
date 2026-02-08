@@ -5,6 +5,7 @@
 #include <pu/Plutonium>
 #include <vector>
 
+#include "data/providers/interfaces/ISaveDataProvider.hpp"
 #include "data/providers/interfaces/ITitleDataProvider.hpp"
 #include "gui/render/PatternRenderer.hpp"
 #include "gui/screens/title-load-screen/sub-components/game-list/ConsoleGameList.hpp"
@@ -72,6 +73,7 @@ private:
     pu::i32 width;  // Component's width
     pu::i32 height;  // Component's height
     ITitleDataProvider::Ref titleProvider;
+    ISaveDataProvider::Ref saveProvider;
     size_t currentGameListIndex;
 
     // Focus management
@@ -108,6 +110,7 @@ public:
         const pu::i32 height,
         input::FocusManager::Ref parentFocusManager,
         ITitleDataProvider::Ref titleProvider,
+        ISaveDataProvider::Ref saveProvider,
         const AccountUid& initialUserId  // Add initial user ID parameter
     );
     PU_SMART_CTOR(GameList)

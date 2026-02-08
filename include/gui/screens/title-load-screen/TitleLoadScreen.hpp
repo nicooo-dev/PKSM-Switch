@@ -119,6 +119,9 @@ public:
         std::function<void(pksm::titles::Title::Ref, pksm::saves::Save::Ref)> onSaveLoaded
     );
     PU_SMART_CTOR(TitleLoadScreen)
+    
+    // public method to refresh save list
+    void RefreshSaves();
 };
 
 }  // namespace pksm::layout
