@@ -33,6 +33,8 @@ void Logger::Initialize() {
             console_initialized = true;
         }
 
+        setvbuf(stdout, NULL, _IONBF, 0);
+
         initialized = true;
 
         // Log initialization status

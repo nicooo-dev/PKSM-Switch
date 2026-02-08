@@ -10,7 +10,7 @@ TOPDIR ?= $(CURDIR)
 include $(DEVKITPRO)/libnx/switch_rules
 
 # Add debug build option
-DEBUG ?= 0
+DEBUG ?= 1
 
 #---------------------------------------------------------------------------------
 # TARGET is the name of the output
@@ -92,7 +92,7 @@ endif
 
 CFLAGS	+=	-DPKSM_MAJOR=$(VER_MAJOR) -DPKSM_MINOR=$(VER_MINOR) -DPKSM_MICRO=$(VER_MICRO) -DPKSM_VERSION=\"$(APP_VERSION)\"
 
-CXXFLAGS	:= $(CFLAGS) -fno-rtti -fexceptions -std=gnu++17
+CXXFLAGS	:= $(CFLAGS) -fno-rtti -fexceptions -std=gnu++20
 
 ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
@@ -205,7 +205,7 @@ debug:
 
 $(BUILD):
 	@[ -d $@ ] || mkdir -p $@
-	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
+	@$(MAKE) DEBUG=$(DEBUG) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
 #---------------------------------------------------------------------------------
 clean:
