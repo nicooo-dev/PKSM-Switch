@@ -77,6 +77,7 @@ private:
     ISaveDataProvider::Ref saveProvider;
     data::AccountManager& accountManager;
     std::function<void(pksm::titles::Title::Ref, pksm::saves::Save::Ref)> onSaveLoaded;
+    std::function<void()> onExitRequested;
 
     // Event handlers
     void OnSaveSelected();
@@ -116,6 +117,7 @@ public:
         data::AccountManager& accountManager,
         std::function<void(pu::ui::Overlay::Ref)> onShowOverlay,
         std::function<void()> onHideOverlay,
+        std::function<void()> onExitRequested,
         std::function<void(pksm::titles::Title::Ref, pksm::saves::Save::Ref)> onSaveLoaded
     );
     PU_SMART_CTOR(TitleLoadScreen)

@@ -1,6 +1,8 @@
 #include "gui/screens/title-load-screen/TitleLoadScreen.hpp"
 
 #include <algorithm>
+#include <cstdlib>
+#include <switch.h>
 #include <sys/stat.h>
 
 #include "gui/screens/title-load-screen/sub-components/game-list/GameListCommon.hpp"
@@ -10,19 +12,29 @@
 
 namespace pksm::layout {
 
+namespace {
+
+void AppendExitHelpItem(std::vector<pksm::ui::HelpItem>& items) {
+    items.push_back({{{pksm::ui::global::ButtonGlyph::Plus}}, "Exit"});
+}
+
+}
+
 pksm::layout::TitleLoadScreen::TitleLoadScreen(
     ITitleDataProvider::Ref titleProvider,
     ISaveDataProvider::Ref saveProvider,
     data::AccountManager& accountManager,
     std::function<void(pu::ui::Overlay::Ref)> onShowOverlay,
     std::function<void()> onHideOverlay,
+    std::function<void()> onExitRequested,
     std::function<void(pksm::titles::Title::Ref, pksm::saves::Save::Ref)> onSaveLoaded
 )
   : BaseLayout(onShowOverlay, onHideOverlay),
     titleProvider(titleProvider),
     saveProvider(saveProvider),
     accountManager(accountManager),
-    onSaveLoaded(onSaveLoaded) {
+    onSaveLoaded(onSaveLoaded),
+    onExitRequested(std::move(onExitRequested)) {
     LOG_DEBUG("Initializing TitleLoadScreen...");
     this->SetBackgroundColor(pksm::ui::global::BACKGROUND_BLUE);
 
@@ -273,7 +285,11 @@ void pksm::layout::TitleLoadScreen::MoveButtonSelectionRight() {
 void pksm::layout::TitleLoadScreen::FocusGameSection() {
     LOG_DEBUG("Focusing game section");
     this->gameList->RequestFocus();
-    UpdateHelpItems(this->gameList);
+    auto items = this->gameList->GetHelpItems();
+    AppendExitHelpItem(items);
+    if (helpFooter) {
+        helpFooter->SetHelpItems(items);
+    }
 }
 
 void pksm::layout::TitleLoadScreen::FocusSaveList() {
@@ -282,25 +298,41 @@ void pksm::layout::TitleLoadScreen::FocusSaveList() {
         gameList->GetSelectedTitle();
     }
     this->saveList->RequestFocus();
-    UpdateHelpItems(this->saveList);
+    auto items = this->saveList->GetHelpItems();
+    AppendExitHelpItem(items);
+    if (helpFooter) {
+        helpFooter->SetHelpItems(items);
+    }
 }
 
 void pksm::layout::TitleLoadScreen::FocusUserIcon() {
     LOG_DEBUG("Focusing user icon");
     this->userIconButton->RequestFocus();
-    UpdateHelpItems(this->userIconButton);
+    auto items = this->userIconButton->GetHelpItems();
+    AppendExitHelpItem(items);
+    if (helpFooter) {
+        helpFooter->SetHelpItems(items);
+    }
 }
 
 void pksm::layout::TitleLoadScreen::FocusLoadButton() {
     LOG_DEBUG("Focusing load button");
     this->loadButton->RequestFocus();
-    UpdateHelpItems(this->loadButton);
+    auto items = this->loadButton->GetHelpItems();
+    AppendExitHelpItem(items);
+    if (helpFooter) {
+        helpFooter->SetHelpItems(items);
+    }
 }
 
 void pksm::layout::TitleLoadScreen::FocusWirelessButton() {
     LOG_DEBUG("Focusing wireless button");
     this->wirelessButton->RequestFocus();
-    UpdateHelpItems(this->wirelessButton);
+    auto items = this->wirelessButton->GetHelpItems();
+    AppendExitHelpItem(items);
+    if (helpFooter) {
+        helpFooter->SetHelpItems(items);
+    }
 }
 
 void pksm::layout::TitleLoadScreen::TransitionToButtons() {
@@ -311,6 +343,14 @@ void pksm::layout::TitleLoadScreen::TransitionToButtons() {
 void pksm::layout::TitleLoadScreen::OnInput(u64 down, u64 up, u64 held) {
     if (HandleHelpInput(down)) {
         return;  // Input was handled by help system
+    }
+
+    if (down & HidNpadButton_Plus) {
+        LOG_DEBUG("Exit button pressed");
+        if (this->onExitRequested) {
+            this->onExitRequested();
+        }
+        return;
     }
 
     if (this->userIconButton->IsFocused()) {

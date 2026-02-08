@@ -133,19 +133,19 @@ BINFILES	:=	$(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*)))
 #---------------------------------------------------------------------------------
 ifeq ($(strip $(CPPFILES)),)
 #---------------------------------------------------------------------------------
-	export LD	:=	$(CC)
+export LD := $(CC)
 #---------------------------------------------------------------------------------
 else
 #---------------------------------------------------------------------------------
-	export LD	:=	$(CXX)
+export LD := $(CXX)
 #---------------------------------------------------------------------------------
 endif
 #---------------------------------------------------------------------------------
 
-export OFILES_BIN	:=	$(addsuffix .o,$(BINFILES))
-export OFILES_SRC	:=	$(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
-export OFILES 	:=	$(OFILES_BIN) $(OFILES_SRC)
-export HFILES_BIN	:=	$(addsuffix .h,$(subst .,_,$(BINFILES)))
+export OFILES_BIN := $(addsuffix .o,$(BINFILES))
+export OFILES_SRC := $(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
+export OFILES  := $(OFILES_BIN) $(OFILES_SRC)
+export HFILES_BIN := $(addsuffix .h,$(subst .,_,$(BINFILES)))
 
 export INCLUDE	:=	$(foreach dir,$(FIND_INCLUDES),-I$(CURDIR)/$(dir)) \
 			$(foreach dir,$(LIBDIRS),-I$(dir)/include) \

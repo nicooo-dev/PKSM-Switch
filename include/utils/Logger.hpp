@@ -42,9 +42,9 @@ private:
 #define LOG_ERROR(msg) ((void)0)
 #define LOG_MEMORY() ((void)0)
 #else
-#define LOG_DEBUG(msg) utils::Logger::Debug(msg)
-#define LOG_INFO(msg) utils::Logger::Info(msg)
-#define LOG_WARNING(msg) utils::Logger::Warning(msg)
-#define LOG_ERROR(msg) utils::Logger::Error(msg)
-#define LOG_MEMORY() utils::Logger::LogMemoryInfo()
+#define LOG_DEBUG(msg) pksm::utils::Logger::Debug(msg)
+#define LOG_INFO(msg) pksm::utils::Logger::Info(msg)
+#define LOG_WARNING(msg) pksm::utils::Logger::Warning(msg)
+#define LOG_ERROR(msg) pksm::utils::Logger::Error(msg)
+#define LOG_MEMORY() pksm::utils::Logger::LogMemoryInfo()
 #endif

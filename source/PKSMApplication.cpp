@@ -1,6 +1,7 @@
 #include "PKSMApplication.hpp"
 
 #include <sstream>
+#include <switch.h>
 
 #include "data/providers/mock/MockBoxDataProvider.hpp"
 #include "data/providers/SaveDataAccessor.hpp"
@@ -260,6 +261,9 @@ void PKSMApplication::OnLoad() {
             *accountManager,
             [this](pu::ui::Overlay::Ref overlay) { this->StartOverlay(overlay); },
             [this]() { this->EndOverlay(); },
+            [this]() {
+                this->Close(false);
+            },
             [this](pksm::titles::Title::Ref title, pksm::saves::Save::Ref save) { this->OnSaveSelected(title, save); }
         );
 

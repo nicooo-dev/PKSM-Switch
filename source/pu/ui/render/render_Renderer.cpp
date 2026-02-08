@@ -100,6 +100,7 @@ void Renderer::Finalize() {
         }
         if (this->init_opts.init_mixer) {
             Mix_CloseAudio();
+            Mix_Quit();
         }
         if (this->ok_pl) {
             plExit();
@@ -108,8 +109,11 @@ void Renderer::Finalize() {
             romfsExit();
         }
         SDL_DestroyRenderer(g_Renderer);
+        g_Renderer = nullptr;
         SDL_FreeSurface(g_WindowSurface);
+        g_WindowSurface = nullptr;
         SDL_DestroyWindow(g_Window);
+        g_Window = nullptr;
         SDL_Quit();
         this->initialized = false;
     }

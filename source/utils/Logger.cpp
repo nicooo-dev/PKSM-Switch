@@ -19,34 +19,22 @@ void Logger::Initialize() {
         Result rc = socketInitializeDefault();
         socket_initialized = R_SUCCEEDED(rc);
 
+        // Enable logging only when nxlink redirection succeeds.
+        // Avoid consoleInit(NULL) fallback since it can conflict with SDL/Plutonium
+        // and cause black screens/crashes when launching normally.
+        console_initialized = false;
         if (socket_initialized) {
-            // Try to redirect output to nxlink
             console_initialized = nxlinkStdio() > 0;
             if (!console_initialized) {
-                // If nxlink redirection fails, try console
-                consoleInit(NULL);
-                console_initialized = true;
+                socketExit();
+                socket_initialized = false;
             }
-        } else {
-            // If socket fails, fallback to console
-            consoleInit(NULL);
-            console_initialized = true;
         }
 
-        setvbuf(stdout, NULL, _IONBF, 0);
+        initialized = socket_initialized && console_initialized;
 
-        initialized = true;
-
-        // Log initialization status
-        if (socket_initialized) {
-            LOG_INFO("Socket initialized successfully");
-            if (console_initialized) {
-                LOG_INFO("Console output redirected to nxlink");
-            } else {
-                LOG_WARNING("Failed to redirect console to nxlink");
-            }
-        } else {
-            LOG_WARNING("Socket initialization failed, using console output");
+        if (initialized) {
+            setvbuf(stdout, NULL, _IONBF, 0);
         }
     }
 }
@@ -57,10 +45,7 @@ void Logger::Finalize() {
             socketExit();
             socket_initialized = false;
         }
-        if (console_initialized) {
-            consoleExit(NULL);
-            console_initialized = false;
-        }
+        console_initialized = false;
         initialized = false;
     }
 }

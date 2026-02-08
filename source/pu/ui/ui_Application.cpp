@@ -1,5 +1,7 @@
 #include <pu/ui/ui_Application.hpp>
 
+#include <switch.h>
+
 namespace pu::ui {
 
     Application::Application(render::Renderer::Ref renderer) {
@@ -89,10 +91,17 @@ namespace pu::ui {
         while(this->is_shown) {
             this->CallForRender();
         }
+
+        this->renderer->Finalize();
     }
 
     bool Application::CallForRender() {
         if(!this->CanBeShown()) {
+            return false;
+        }
+
+        if(!appletMainLoop()) {
+            this->is_shown = false;
             return false;
         }
 
@@ -263,11 +272,6 @@ namespace pu::ui {
 
     void Application::Close(const bool do_exit) {
         this->is_shown = false;
-        this->renderer->Finalize();
-
-        if(do_exit) {
-            exit(0);
-        }
     }
 
 }
