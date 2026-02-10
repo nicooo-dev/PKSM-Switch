@@ -41,6 +41,47 @@ pksm::saves::Generation ToAppGeneration(pksm::Generation gen) {
         default:
             return pksm::saves::Generation::EIGHT;
     }
+
+}
+
+pksm::saves::BagPouch ToAppBagPouch(const pksm::Sav::Pouch pouch) {
+    using SP = pksm::Sav::Pouch;
+    using AP = pksm::saves::BagPouch;
+
+    switch (pouch) {
+        case SP::NormalItem:
+            return AP::NormalItem;
+        case SP::KeyItem:
+            return AP::KeyItem;
+        case SP::TM:
+            return AP::TM;
+        case SP::Mail:
+            return AP::Mail;
+        case SP::Medicine:
+            return AP::Medicine;
+        case SP::Berry:
+            return AP::Berry;
+        case SP::Ball:
+            return AP::Ball;
+        case SP::Battle:
+            return AP::Battle;
+        case SP::Candy:
+            return AP::Candy;
+        case SP::ZCrystals:
+            return AP::ZCrystals;
+        case SP::Treasure:
+            return AP::Treasure;
+        case SP::Ingredient:
+            return AP::Ingredient;
+        case SP::PCItem:
+            return AP::PCItem;
+        case SP::RotomPower:
+            return AP::RotomPower;
+        case SP::CatchingItem:
+            return AP::CatchingItem;
+        default:
+            return AP::Unknown;
+    }
 }
 
 pksm::saves::Gender ToAppGender(pksm::Gender gender) {
@@ -312,8 +353,8 @@ pksm::saves::SaveData::Ref SaveDataAccessor::LoadSaveDataFromFile(
     LOG_DEBUG("[SaveDataAccessor] Loaded save. Dex seen = " + std::to_string(dexSeen) + ", Dex Caught = " + std::to_string(dexCaught));
 
     // keep device mounted here aswell for StorageScreen access
-    
-    return std::make_shared<pksm::saves::SaveData>(
+
+    auto save_data = std::make_shared<pksm::saves::SaveData>(
         saveName,
         generation,
         version,
@@ -329,4 +370,36 @@ pksm::saves::SaveData::Ref SaveDataAccessor::LoadSaveDataFromFile(
         playedMinutes,
         playedSeconds
     );
+
+    std::vector<pksm::saves::BagItem> bag_items;
+    try {
+        const auto pouches = sav->pouches();
+        for (const auto& pouch_info : pouches) {
+            const auto pouch = pouch_info.first;
+            const auto slot_count = pouch_info.second;
+            for (int slot = 0; slot < slot_count; slot++) {
+                auto item = sav->item(pouch, static_cast<u16>(slot));
+                if (!item) {
+                    continue;
+                }
+
+                const auto id = item->id();
+                const auto count = item->count();
+                if ((id == 0) || (count == 0)) {
+                    continue;
+                }
+
+                bag_items.push_back(pksm::saves::BagItem{
+                    ToAppBagPouch(pouch),
+                    static_cast<u16>(id),
+                    static_cast<u16>(count),
+                });
+            }
+        }
+    } catch (const std::exception& e) {
+        LOG_ERROR("[SaveDataAccessor] Failed to extract bag items: " + std::string(e.what()));
+    }
+
+    save_data->setBagItems(std::move(bag_items));
+    return save_data;
 }

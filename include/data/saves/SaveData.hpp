@@ -54,6 +54,31 @@ enum class GameVersion {
     VL
 };
 
+enum class BagPouch {
+    Unknown,
+    NormalItem,
+    KeyItem,
+    TM,
+    Mail,
+    Medicine,
+    Berry,
+    Ball,
+    Battle,
+    Candy,
+    ZCrystals,
+    Treasure,
+    Ingredient,
+    PCItem,
+    RotomPower,
+    CatchingItem
+};
+
+struct BagItem {
+    BagPouch pouch;
+    u16 itemId;
+    u16 count;
+};
+
 class SaveData {
 public:
     PU_SMART_CTOR(SaveData)
@@ -92,6 +117,9 @@ public:
     u8 getPlayedMinutes() const { return playedMinutes; }
     u8 getPlayedSeconds() const { return playedSeconds; }
 
+    const std::vector<BagItem>& getBagItems() const { return bagItems; }
+    void setBagItems(std::vector<BagItem> items) { bagItems = std::move(items); }
+
     // Formatted time string (e.g., "26h 15m")
     std::string getPlayedTimeString() const;
 
@@ -116,6 +144,8 @@ private:
     u16 playedHours;
     u8 playedMinutes;
     u8 playedSeconds;
+
+    std::vector<BagItem> bagItems;
 };
 
 }  // namespace pksm::saves

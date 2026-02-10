@@ -5,3 +5,6 @@ PKSM.lst
 
 # Build Folder
 /build/
+
+# vscode settings
+/.vscode/

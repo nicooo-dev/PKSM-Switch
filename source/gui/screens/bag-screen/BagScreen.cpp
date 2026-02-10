@@ -4,14 +4,20 @@
 #include "gui/shared/interfaces/IHelpProvider.hpp"
 #include "utils/Logger.hpp"
 
+#include "data/saves/SaveData.hpp"
+#include "pksmcore/enums/Language.hpp"
+#include "pksmcore/utils/i18n.hpp"
+
 namespace pksm::layout {
 
 BagScreen::BagScreen(
+    ISaveDataAccessor::Ref saveDataAccessor,
     std::function<void()> onBack,
     std::function<void(pu::ui::Overlay::Ref)> onShowOverlay,
     std::function<void()> onHideOverlay
 )
   : BaseLayout(onShowOverlay, onHideOverlay),
+    saveDataAccessor(std::move(saveDataAccessor)),
     onBack(onBack),
     buttonHandler() {
     
@@ -62,12 +68,42 @@ BagScreen::~BagScreen() {
     LOG_DEBUG("BagScreen destructor");
 }
 
+void BagScreen::RefreshCategories() {
+    BuildCategoriesForCurrentSave();
+
+    const size_t visible_count = categoryLabels.size();
+    for (size_t i = 0; i < categoryButtons.size(); i++) {
+        if (i < visible_count) {
+            categoryButtons[i]->SetContent(categoryLabels[i]);
+            categoryButtons[i]->SetHelpText("Open " + categoryLabels[i] + " category");
+            categoryButtons[i]->SetVisible(true);
+        } else {
+            categoryButtons[i]->SetVisible(false);
+        }
+    }
+
+    if (currentCategory == -1) {
+        for (auto &btn : categoryButtons) {
+            if (btn->IsVisible()) {
+                btn->RequestFocus();
+                break;
+            }
+        }
+    }
+}
+
 void BagScreen::OnInput(u64 down, u64 up, u64 held) {
     if (HandleHelpInput(down)) {
         return;
     }
 
     buttonHandler.HandleInput(down, up, held);
+
+    if ((currentCategory != -1) && itemList && itemList->IsFocused()) {
+        itemList->OnInput(down, up, held, pu::ui::TouchPoint());
+        UpdateItemDisplay();
+        return;
+    }
 
     if (down & HidNpadButton_Down) {
         auto currentFocused = bagScreenFocusManager->GetFocusedElement();
@@ -163,42 +199,118 @@ void BagScreen::OnHelpOverlayHidden() {
     }
 }
 
+void BagScreen::BuildCategoriesForCurrentSave() {
+    categoryLabels.clear();
+    categoryPouches.clear();
+
+    auto version = pksm::saves::GameVersion::RD;
+    if (this->saveDataAccessor) {
+        auto saveData = this->saveDataAccessor->getCurrentSaveData();
+        if (saveData) {
+            version = saveData->getVersion();
+        }
+    }
+
+    const bool is_swsh = (version == pksm::saves::GameVersion::SW) || (version == pksm::saves::GameVersion::SH);
+    const bool is_lgpe = (version == pksm::saves::GameVersion::GP) || (version == pksm::saves::GameVersion::GE);
+
+    if (is_lgpe) {
+        categoryLabels = {
+            "Medicine Pocket",
+            "TM Case",
+            "Candy Jar",
+            "Power-Up Pocket",
+            "Catching Pocket",
+            "Battle Pocket",
+            "Bag",
+            "Unused",
+        };
+
+        categoryPouches = {
+            pksm::saves::BagPouch::Medicine,
+            pksm::saves::BagPouch::TM,
+            pksm::saves::BagPouch::Candy,
+            pksm::saves::BagPouch::ZCrystals,
+            pksm::saves::BagPouch::CatchingItem,
+            pksm::saves::BagPouch::Battle,
+            pksm::saves::BagPouch::NormalItem,
+            pksm::saves::BagPouch::Unknown,
+        };
+    } else if (is_swsh) {
+        categoryLabels = {
+            "Medicine",
+            "Poke Balls",
+            "Battle Items",
+            "Berries",
+            "Other Items",
+            "TMs",
+            "Treasures",
+            "Ingredients",
+            "Key Items",
+        };
+
+        categoryPouches = {
+            pksm::saves::BagPouch::Medicine,
+            pksm::saves::BagPouch::Ball,
+            pksm::saves::BagPouch::Battle,
+            pksm::saves::BagPouch::Berry,
+            pksm::saves::BagPouch::NormalItem,
+            pksm::saves::BagPouch::TM,
+            pksm::saves::BagPouch::Treasure,
+            pksm::saves::BagPouch::Ingredient,
+            pksm::saves::BagPouch::KeyItem,
+        };
+    } else {
+        categoryLabels = {
+            "Items",
+            "Key Items",
+            "TMs",
+            "Medicine",
+            "Berries",
+            "Z-Crystals",
+            "Rotom Powers",
+        };
+
+        categoryPouches = {
+            pksm::saves::BagPouch::NormalItem,
+            pksm::saves::BagPouch::KeyItem,
+            pksm::saves::BagPouch::TM,
+            pksm::saves::BagPouch::Medicine,
+            pksm::saves::BagPouch::Berry,
+            pksm::saves::BagPouch::ZCrystals,
+            pksm::saves::BagPouch::RotomPower,
+        };
+    }
+}
+
 void BagScreen::CreateCategoryButtons() {
-    const std::vector<std::string> categories = {
-        "Items",
-        "Key Items", 
-        "TMs",
-        "Medicine",
-        "Berries",
-        "Z-Crystals",
-        "Rotom Powers"
-    };
+    BuildCategoriesForCurrentSave();
 
     pu::i32 currentY = CATEGORY_TOP_MARGIN;
-
-    for (size_t i = 0; i < categories.size(); i++) {
+    for (size_t i = 0; i < MAX_CATEGORY_BUTTONS; i++) {
         auto button = pksm::ui::FocusableButton::New(
             SIDE_MARGIN,
             currentY,
             BUTTON_WIDTH,
             BUTTON_HEIGHT,
-            categories[i],
-            pu::ui::Color(140, 110, 0, 200),  // darker gold for background
-            pu::ui::Color(200, 160, 0, 255)   // gold for focused state
+            "",
+            pu::ui::Color(140, 110, 0, 200),
+            pu::ui::Color(200, 160, 0, 255)
         );
-        
+
         button->SetContentFont(pksm::ui::global::MakeMediumFontName(pksm::ui::global::FONT_SIZE_BUTTON));
         button->SetContentColor(pksm::ui::global::TEXT_WHITE);
-        button->SetOnClick([this, i]() {
-            LOG_DEBUG("Category " + std::to_string(i) + " clicked");
-            ShowCategory(i);
+        button->SetOnClick([this, idx = i]() {
+            LOG_DEBUG("Category " + std::to_string(idx) + " clicked");
+            ShowCategory(static_cast<int>(idx));
         });
-        button->SetHelpText("Open " + categories[i] + " category");
-        
+
         this->Add(button);
         categoryButtons.push_back(button);
         currentY += BUTTON_HEIGHT + BUTTON_SPACING;
     }
+
+    RefreshCategories();
 }
 
 void BagScreen::CreateItemControls() {
@@ -222,9 +334,23 @@ void BagScreen::CreateItemControls() {
     itemNameText->SetVisible(false);
     this->Add(itemNameText);
 
+    itemList = pksm::ui::FocusableMenu::New(
+        SIDE_MARGIN,
+        ITEM_CONTROL_TOP_MARGIN,
+        700,
+        pu::ui::Color(140, 110, 0, 200),
+        pu::ui::Color(200, 160, 0, 255),
+        70,
+        5
+    );
+    itemList->SetVisible(false);
+    itemList->SetOnSelectionChanged([this]() { this->UpdateItemDisplay(); });
+    bagScreenFocusManager->RegisterFocusable(itemList);
+    this->Add(itemList);
+
     decreaseButton = pksm::ui::FocusableButton::New(
         SIDE_MARGIN,
-        ITEM_CONTROL_TOP_MARGIN + 60,
+        ITEM_CONTROL_TOP_MARGIN + 400,
         100,
         BUTTON_HEIGHT,
         "-",
@@ -244,7 +370,7 @@ void BagScreen::CreateItemControls() {
 
     itemQuantityText = pu::ui::elm::TextBlock::New(
         SIDE_MARGIN + 120,
-        ITEM_CONTROL_TOP_MARGIN + 85,
+        ITEM_CONTROL_TOP_MARGIN + 425,
         "x10"
     );
     itemQuantityText->SetColor(pksm::ui::global::TEXT_WHITE);
@@ -253,8 +379,8 @@ void BagScreen::CreateItemControls() {
     this->Add(itemQuantityText);
 
     increaseButton = pksm::ui::FocusableButton::New(
-        SIDE_MARGIN + 200,
-        ITEM_CONTROL_TOP_MARGIN + 60,
+        SIDE_MARGIN + 340,
+        ITEM_CONTROL_TOP_MARGIN + 400,
         100,
         BUTTON_HEIGHT,
         "+",
@@ -272,7 +398,7 @@ void BagScreen::CreateItemControls() {
 
     backButton = pksm::ui::FocusableButton::New(
         SIDE_MARGIN,
-        ITEM_CONTROL_TOP_MARGIN + 160,
+        ITEM_CONTROL_TOP_MARGIN + 500,
         BUTTON_WIDTH,
         BUTTON_HEIGHT,
         "Back to Categories",
@@ -294,36 +420,31 @@ void BagScreen::CreateItemControls() {
 
 void BagScreen::ShowCategory(int categoryIndex) {
     currentCategory = categoryIndex;
-    
-    const std::vector<std::string> categoryNames = {
-        "Items",
-        "Key Items", 
-        "TMs",
-        "Medicine",
-        "Berries",
-        "Z-Crystals",
-        "Rotom Powers"
-    };
+    currentItemIndex = 0;
 
-    if (categoryIndex >= 0 && categoryIndex < categoryNames.size()) {
+    if (categoryIndex >= 0 && categoryIndex < static_cast<int>(categoryLabels.size())) {
         for (auto& button : categoryButtons) {
             button->SetVisible(false);
         }
         
-        categoryHeaderText->SetText(categoryNames[categoryIndex]);
+        categoryHeaderText->SetText(categoryLabels[categoryIndex]);
         categoryHeaderText->SetVisible(true);
         
-        itemNameText->SetText("Sample " + categoryNames[categoryIndex].substr(0, categoryNames[categoryIndex].length() - 1));  // Remove 's' for singular
-        itemNameText->SetVisible(true);
-        
+        itemNameText->SetVisible(false);
+
+        itemList->SetVisible(true);
+        itemList->SetFocused(true);
+
         decreaseButton->SetVisible(true);
         increaseButton->SetVisible(true);
         itemQuantityText->SetVisible(true);
         backButton->SetVisible(true);
+
+        RefreshItemListForCurrentCategory();
         
         UpdateItemDisplay();
         
-        decreaseButton->RequestFocus();
+        itemList->RequestFocus();
         
         std::vector<pksm::ui::HelpItem> helpItems = {
             {{{pksm::ui::global::ButtonGlyph::A}}, "Adjust Quantity"},
@@ -334,6 +455,8 @@ void BagScreen::ShowCategory(int categoryIndex) {
     } else {
         categoryHeaderText->SetVisible(false);
         itemNameText->SetVisible(false);
+        itemList->SetVisible(false);
+        itemList->SetFocused(false);
         decreaseButton->SetVisible(false);
         increaseButton->SetVisible(false);
         itemQuantityText->SetVisible(false);
@@ -342,10 +465,8 @@ void BagScreen::ShowCategory(int categoryIndex) {
         for (auto& button : categoryButtons) {
             button->SetVisible(true);
         }
-        
-        if (!categoryButtons.empty()) {
-            categoryButtons[0]->RequestFocus();
-        }
+
+        RefreshCategories();
         
         std::vector<pksm::ui::HelpItem> helpItems = {
             {{{pksm::ui::global::ButtonGlyph::A}}, "Select Category"},
@@ -356,7 +477,93 @@ void BagScreen::ShowCategory(int categoryIndex) {
     }
 }
 
+void BagScreen::RefreshItemListForCurrentCategory() {
+    currentItemMap.clear();
+
+    if (!itemList) {
+        return;
+    }
+
+    if (!this->saveDataAccessor) {
+        itemList->SetDataSource({"No save loaded"});
+        return;
+    }
+
+    auto saveData = this->saveDataAccessor->getCurrentSaveData();
+    if (!saveData) {
+        itemList->SetDataSource({"No save loaded"});
+        return;
+    }
+
+    pksm::saves::BagPouch pouch = pksm::saves::BagPouch::Unknown;
+    if ((this->currentCategory >= 0) && (static_cast<size_t>(this->currentCategory) < categoryPouches.size())) {
+        pouch = categoryPouches.at(static_cast<size_t>(this->currentCategory));
+    }
+
+    std::vector<std::string> names;
+    const auto &items = saveData->getBagItems();
+    for (size_t i = 0; i < items.size(); i++) {
+        const auto &it = items[i];
+        if (it.pouch != pouch) {
+            continue;
+        }
+
+        auto name = i18n::item(pksm::Language::ENG, it.itemId);
+        if (name.empty()) {
+            name = "Item #" + std::to_string(it.itemId);
+        }
+        names.push_back(name);
+        currentItemMap.push_back(i);
+    }
+
+    if (names.empty()) {
+        itemList->SetDataSource({"No items"});
+        currentItemMap.clear();
+    } else {
+        itemList->SetDataSource(names);
+    }
+}
+
 void BagScreen::UpdateItemDisplay() {
+    using BP = pksm::saves::BagPouch;
+
+    if (!this->saveDataAccessor) {
+        itemNameText->SetText("No save loaded");
+        itemQuantityText->SetText("x0");
+        return;
+    }
+
+    auto saveData = this->saveDataAccessor->getCurrentSaveData();
+    if (!saveData) {
+        itemNameText->SetText("No save loaded");
+        itemQuantityText->SetText("x0");
+        return;
+    }
+
+    const auto &items = saveData->getBagItems();
+
+    if (!itemList || currentItemMap.empty()) {
+        currentItemQuantity = 0;
+        itemQuantityText->SetText("x0");
+        return;
+    }
+
+    const auto sel = itemList->GetSelectedIndex();
+    if ((sel < 0) || (static_cast<size_t>(sel) >= currentItemMap.size())) {
+        currentItemQuantity = 0;
+        itemQuantityText->SetText("x0");
+        return;
+    }
+
+    const auto bag_idx = currentItemMap.at(static_cast<size_t>(sel));
+    if (bag_idx >= items.size()) {
+        currentItemQuantity = 0;
+        itemQuantityText->SetText("x0");
+        return;
+    }
+
+    const auto &cur = items.at(bag_idx);
+    currentItemQuantity = cur.count;
     itemQuantityText->SetText("x" + std::to_string(currentItemQuantity));
 }
 

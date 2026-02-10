@@ -309,6 +309,7 @@ void PKSMApplication::OnLoad() {
         // Create bag screen
         LOG_DEBUG("Creating bag screen...");
         bagScreen = pksm::layout::BagScreen::New(
+            saveDataAccessor,
             [this]() { this->ShowMainMenu(); },  // Back handler goes to main menu
             [this](pu::ui::Overlay::Ref overlay) { this->StartOverlay(overlay); },
             [this]() { this->EndOverlay(); }
@@ -337,6 +338,10 @@ void PKSMApplication::OnLoad() {
             if (storageScreen && saveData) {
                 LOG_DEBUG("Preloading box data for StorageScreen");
                 storageScreen->LoadBoxData();
+            }
+
+            if (bagScreen) {
+                bagScreen->RefreshCategories();
             }
         });
 
