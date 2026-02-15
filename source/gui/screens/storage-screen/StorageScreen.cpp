@@ -17,7 +17,8 @@ StorageScreen::StorageScreen(
   : BaseLayout(onShowOverlay, onHideOverlay),
     onBack(onBack),
     saveDataAccessor(saveDataAccessor),
-    boxDataProvider(boxDataProvider) {
+    boxDataProvider(boxDataProvider),
+    isSummaryOverlayVisible(false) {
     LOG_DEBUG("Initializing StorageScreen...");
 
     this->SetBackgroundColor(bgColor);
@@ -46,10 +47,65 @@ StorageScreen::StorageScreen(
         }
     });
 
+    buttonHandler.RegisterButton(HidNpadButton_X, nullptr, [this]() {
+        if (isSummaryOverlayVisible) {
+            return;
+        }
+
+        if (!this->saveDataAccessor || !this->boxDataProvider) {
+            return;
+        }
+
+        auto saveData = this->saveDataAccessor->getCurrentSaveData();
+        if (!saveData) {
+            return;
+        }
+
+        pksm::ui::PokemonBox::Ref targetBox;
+        if (activeBox == ActiveBox::Save) {
+            targetBox = pokemonSaveBox;
+        } else {
+            targetBox = pokemonBankBox;
+        }
+
+        if (!targetBox) {
+            return;
+        }
+
+        const int boxIndex = targetBox->GetCurrentBox();
+        const int slotIndex = targetBox->GetSelectedSlot();
+        if (slotIndex < 0) {
+            return;
+        }
+
+        const auto slotData = targetBox->GetPokemonData(boxIndex, slotIndex);
+        if (slotData.isEmpty()) {
+            return;
+        }
+
+        auto pk = this->boxDataProvider->GetPokemon(saveData, boxIndex, slotIndex);
+        if (!pk) {
+            return;
+        }
+
+        auto overlay = pksm::ui::PokemonSummaryOverlay::New(0, 0, GetWidth(), GetHeight());
+        overlay->SetPokemon(std::move(pk));
+        this->onShowOverlay(overlay);
+        isSummaryOverlayVisible = true;
+
+        if (pokemonBankBox) {
+            pokemonBankBox->SetDisabled(true);
+        }
+        if (pokemonSaveBox) {
+            pokemonSaveBox->SetDisabled(true);
+        }
+    });
+
     // Set initial help items
     std::vector<pksm::ui::HelpItem> helpItems = {
         {{{pksm::ui::global::ButtonGlyph::A}}, "Select"},
         {{{pksm::ui::global::ButtonGlyph::B}}, "Back to Main Menu"},
+        {{{pksm::ui::global::ButtonGlyph::X}}, "Summary"},
         {{{pksm::ui::global::ButtonGlyph::L}, {pksm::ui::global::ButtonGlyph::R}}, "Switch Box"},
         {{{pksm::ui::global::ButtonGlyph::DPad}}, "Navigate Box"},
     };
@@ -182,6 +238,15 @@ void StorageScreen::LoadBoxData() {
 StorageScreen::~StorageScreen() = default;
 
 void StorageScreen::OnInput(u64 down, u64 up, u64 held) {
+    if (isSummaryOverlayVisible) {
+        if (down & HidNpadButton_B) {
+            onHideOverlay();
+            isSummaryOverlayVisible = false;
+            SetActiveBox(activeBox);
+        }
+        return;
+    }
+
     if (HandleHelpInput(down)) {
         return;
     }

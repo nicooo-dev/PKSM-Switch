@@ -12,6 +12,7 @@
 #include "gui/screens/startup-screen/StartupScreen.hpp"
 #include "gui/screens/storage-screen/StorageScreen.hpp"
 #include "gui/screens/title-load-screen/TitleLoadScreen.hpp"
+#include "gui/shared/components/NotificationCenter.hpp"
 
 namespace pksm {
 
@@ -31,6 +32,9 @@ private:
     ISaveDataProvider::Ref saveProvider;
     ISaveDataAccessor::Ref saveDataAccessor;
     IBoxDataProvider::Ref boxDataProvider;
+
+    // global toast notifications (drawn above everything)
+    pksm::ui::NotificationCenter::Ref notificationCenter;
 
     // Initialize renderer options with basic configuration
     static pu::ui::render::RendererInitOptions CreateRendererOptions();

@@ -15,6 +15,7 @@ namespace pu::ui {
         this->lyt = nullptr;
         this->loaded = false;
         this->render_over_fn = {};
+        this->render_top_cbs = {};
         this->fade_alpha = 0xFF;
         this->fade_alpha_increment_steps = DefaultFadeAlphaIncrementSteps;
         this->fade_alpha_incr = {};
@@ -264,6 +265,12 @@ namespace pu::ui {
             }
             else {
                 this->renderer->RenderRectangleFill(this->fade_bg_clr.WithAlpha(over_alpha), 0, 0, render::ScreenWidth, render::ScreenHeight);
+            }
+        }
+
+        for(auto &render_cb: this->render_top_cbs) {
+            if(render_cb) {
+                render_cb(this->renderer);
             }
         }
 

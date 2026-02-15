@@ -11,6 +11,7 @@
 #include "gui/shared/components/HelpFooter.hpp"
 #include "gui/shared/components/HelpOverlay.hpp"
 #include "gui/shared/components/PokemonBox.hpp"
+#include "gui/shared/components/PokemonSummaryOverlay.hpp"
 #include "gui/shared/interfaces/IHelpProvider.hpp"
 #include "input/ButtonInputHandler.hpp"
 #include "input/directional/DirectionalInputHandler.hpp"
@@ -46,6 +47,8 @@ private:
     ActiveBox activeBox = ActiveBox::Save;
     ISaveDataAccessor::Ref saveDataAccessor;
     IBoxDataProvider::Ref boxDataProvider;
+
+    bool isSummaryOverlayVisible = false;
 
     // Layout constants
     static constexpr pu::i32 HEADER_TOP_MARGIN = 35;

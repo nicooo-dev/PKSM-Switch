@@ -5,6 +5,7 @@
 
 #include "data/saves/SaveData.hpp"
 #include "gui/shared/components/BoxPokemonData.hpp"
+#include "pksmcore/pkx/PKX.hpp"
 
 class IBoxDataProvider {
 public:
@@ -28,4 +29,10 @@ public:
         int slotIndex,
         const pksm::ui::BoxPokemonData& pokemonData
     ) = 0;
+
+    virtual std::unique_ptr<pksm::PKX> GetPokemon(
+        const pksm::saves::SaveData::Ref& saveData,
+        int boxIndex,
+        int slotIndex
+    ) const = 0;
 };

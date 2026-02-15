@@ -25,6 +25,7 @@ namespace pu::ui {
             using OnInputCallback = std::function<void(const u64, const u64, const u64, const TouchPoint)>;
             using RenderCallback = std::function<void()>;
             using RenderOverFunction = std::function<bool(render::Renderer::Ref&)>;
+            using RenderTopCallback = std::function<void(render::Renderer::Ref&)>;
 
             static constexpr u8 DefaultFadeAlphaIncrementSteps = 20;
 
@@ -43,6 +44,7 @@ namespace pu::ui {
             u64 ovl_timeout_ms;
             std::chrono::steady_clock::time_point ovl_start_time;
             std::vector<RenderCallback> render_cbs;
+            std::vector<RenderTopCallback> render_top_cbs;
             OnInputCallback on_ipt_cb;
             render::Renderer::Ref renderer;
             RMutex render_lock;
@@ -69,6 +71,10 @@ namespace pu::ui {
 
             inline void AddRenderCallback(RenderCallback render_cb) {
                 this->render_cbs.push_back(render_cb);
+            }
+
+            inline void AddRenderTopCallback(RenderTopCallback render_cb) {
+                this->render_top_cbs.push_back(render_cb);
             }
 
             inline void SetOnInput(OnInputCallback on_ipt_cb) {

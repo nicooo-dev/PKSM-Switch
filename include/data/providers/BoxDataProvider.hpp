@@ -1,21 +1,31 @@
 #pragma once
 
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "data/providers/interfaces/IBoxDataProvider.hpp"
 #include "data/saves/SaveData.hpp"
 #include "gui/shared/components/BoxPokemonData.hpp"
 
+namespace pksm {
+class Sav;
+}
+
 class BoxDataProvider : public IBoxDataProvider {
 private:
-    // Load box data from actual save file
+    mutable std::string cachedSaveName;
+    mutable std::unique_ptr<pksm::Sav> cachedSav;
+
+    pksm::Sav* GetSavForSaveData(const pksm::saves::SaveData::Ref& saveData) const;
+
+    // load box data from save file
     pksm::ui::BoxData LoadBoxDataFromSave(
         const pksm::saves::SaveData::Ref& saveData,
         int boxIndex
     ) const;
 
-    // Save box data to actual save file
+    // save box data to save file (TODO)
     bool SaveBoxDataToFile(
         const pksm::saves::SaveData::Ref& saveData,
         int boxIndex,
@@ -24,7 +34,7 @@ private:
 
 public:
     BoxDataProvider();
-    virtual ~BoxDataProvider() = default;
+    ~BoxDataProvider() override;
 
     // IBoxDataProvider interface implementation
     size_t GetBoxCount(const pksm::saves::SaveData::Ref& saveData) const override;
@@ -40,4 +50,10 @@ public:
         int slotIndex,
         const pksm::ui::BoxPokemonData& pokemonData
     ) override;
+
+    std::unique_ptr<pksm::PKX> GetPokemon(
+        const pksm::saves::SaveData::Ref& saveData,
+        int boxIndex,
+        int slotIndex
+    ) const override;
 };

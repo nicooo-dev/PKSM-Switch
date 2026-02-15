@@ -37,14 +37,20 @@ pksm::ui::BoxItem::BoxItem(
     onSelectCallback(nullptr),
     touchHandler(),
     buttonHandler() {
+    static constexpr pu::i32 spriteOverscan = 12;
+    const pu::i32 spriteWidth = width + spriteOverscan;
+    const pu::i32 spriteHeight = height + spriteOverscan;
+    const pu::i32 spriteX = (width - spriteWidth) / 2;
+    const pu::i32 spriteY = (height - spriteHeight) / 2;
+
     // Create container with elements
     container = pu::ui::Container::New(0, 0, width, height);
     background = pu::ui::elm::Rectangle::New(0, 0, width, height, defaultBgColor);
-    this->image = pu::ui::elm::Image::New(0, 0, image);
+    this->image = pu::ui::elm::Image::New(spriteX, spriteY, image);
 
     // Set image dimensions to match container
-    this->image->SetWidth(width);
-    this->image->SetHeight(height);
+    this->image->SetWidth(spriteWidth);
+    this->image->SetHeight(spriteHeight);
 
     // Add elements to container
     container->Add(background);
@@ -89,10 +95,15 @@ pksm::ui::BoxItem::BoxItem(
 }
 
 void pksm::ui::BoxItem::SetWidth(const pu::i32 width) {
+    static constexpr pu::i32 spriteOverscan = 12;
+    const pu::i32 spriteWidth = width + spriteOverscan;
+    const pu::i32 spriteX = (width - spriteWidth) / 2;
+
     this->width = width;
     container->SetWidth(width);
     background->SetWidth(width);
-    image->SetWidth(width);
+    image->SetX(spriteX);
+    image->SetWidth(spriteWidth);
 
     // Update outlines
     pu::i32 outlineWidth = width + (outlinePadding * 2);
@@ -101,10 +112,15 @@ void pksm::ui::BoxItem::SetWidth(const pu::i32 width) {
 }
 
 void pksm::ui::BoxItem::SetHeight(const pu::i32 height) {
+    static constexpr pu::i32 spriteOverscan = 12;
+    const pu::i32 spriteHeight = height + spriteOverscan;
+    const pu::i32 spriteY = (height - spriteHeight) / 2;
+
     this->height = height;
     container->SetHeight(height);
     background->SetHeight(height);
-    image->SetHeight(height);
+    image->SetY(spriteY);
+    image->SetHeight(spriteHeight);
 
     // Update outlines
     pu::i32 outlineHeight = height + (outlinePadding * 2);
@@ -163,9 +179,17 @@ pu::i32 pksm::ui::BoxItem::GetHeight() {
 }
 
 void pksm::ui::BoxItem::SetImage(pu::sdl2::TextureHandle::Ref newImage) {
+    static constexpr pu::i32 spriteOverscan = 12;
+    const pu::i32 spriteWidth = width + spriteOverscan;
+    const pu::i32 spriteHeight = height + spriteOverscan;
+    const pu::i32 spriteX = (width - spriteWidth) / 2;
+    const pu::i32 spriteY = (height - spriteHeight) / 2;
+
     image->SetImage(newImage);
-    image->SetWidth(width);
-    image->SetHeight(height);
+    image->SetX(spriteX);
+    image->SetY(spriteY);
+    image->SetWidth(spriteWidth);
+    image->SetHeight(spriteHeight);
 }
 
 pu::ui::elm::Image::Ref pksm::ui::BoxItem::GetImage() {

@@ -157,8 +157,10 @@ bool PokemonSpriteManager::ParseJsonMetadata(const std::string& jsonPath) {
         nlohmann::json data = nlohmann::json::parse(file);
         file.close();
 
-        // Base path for sprites - all sprite files are in this directory
-        std::string basePath = "romfs:/gfx/pokesprites/";
+        std::string basePath = "romfs:/gfx/data/sprites/";
+        if (jsonPath.find("romfs:/gfx/data/") != std::string::npos) {
+            basePath = "romfs:/gfx/data/sprites/";
+        }
 
         // Process each Pokemon sprite entry
         for (const auto& entry : data["pokemon"]) {
@@ -178,7 +180,15 @@ bool PokemonSpriteManager::ParseJsonMetadata(const std::string& jsonPath) {
                 continue;
             }
 
-            std::string filePath = basePath + entry["file_path"].get<std::string>();
+            const std::string rawPath = entry["file_path"].get<std::string>();
+            std::string filePath;
+
+            // allow romfs paths in JSON.
+            if (rawPath.rfind("romfs:/", 0) == 0) {
+                filePath = rawPath;
+            } else {
+                filePath = basePath + rawPath;
+            }
 
             // Generate key and store the sprite path
             std::string key = GenerateKey(species, formId, isShiny);

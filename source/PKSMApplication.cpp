@@ -3,13 +3,14 @@
 #include <sstream>
 #include <switch.h>
 
-#include "data/providers/mock/MockBoxDataProvider.hpp"
+#include "data/providers/BoxDataProvider.hpp"
 #include "data/providers/SaveDataAccessor.hpp"
 #include "data/providers/SaveDataProvider.hpp"
 #include "data/providers/TitleDataProvider.hpp"
 #include "gui/shared/FontManager.hpp"
 #include "gui/shared/UIConstants.hpp"
 #include "utils/Logger.hpp"
+#include "utils/NotificationManager.hpp"
 #include "utils/PokemonSpriteManager.hpp"
 
 namespace pksm {
@@ -101,6 +102,14 @@ PKSMApplication::PKSMApplication(
     boxDataProvider(std::move(boxDataProvider)) {
     // Add render callback to process account updates
     AddRenderCallback([this]() { this->accountManager->ProcessPendingUpdates(); });
+
+    // global notifications: render above layouts/overlays
+    notificationCenter = pksm::ui::NotificationCenter::New(0, 0, 640);
+    AddRenderTopCallback([this](pu::ui::render::Renderer::Ref& drawer) {
+        if (notificationCenter) {
+            notificationCenter->OnRender(drawer, notificationCenter->GetProcessedX(), notificationCenter->GetProcessedY());
+        }
+    });
 }
 
 PKSMApplication::Ref PKSMApplication::Initialize() {
@@ -126,7 +135,7 @@ PKSMApplication::Ref PKSMApplication::Initialize() {
         RegisterAdditionalFonts();
 
         // Initialize Pokemon sprite manager (optional)
-        if (!utils::PokemonSpriteManager::Initialize("romfs:/gfx/pokesprites/pokesprite.json")) {
+        if (!utils::PokemonSpriteManager::Initialize("romfs:/gfx/data/data.json")) {
             LOG_WARNING("Failed to initialize sprite manager, continuing without sprites");
         }
 
@@ -153,7 +162,7 @@ PKSMApplication::Ref PKSMApplication::Initialize() {
         auto titleProviderConcrete = std::make_shared<pksm::titles::TitleDataProvider>();
         auto saveProviderConcrete = std::make_shared<SaveDataProvider>(accountManager->GetCurrentAccount());
         auto saveDataAccessorConcrete = std::make_shared<SaveDataAccessor>(accountManager->GetCurrentAccount());
-        auto boxDataProviderConcrete = std::make_shared<MockBoxDataProvider>();
+        auto boxDataProviderConcrete = std::make_shared<BoxDataProvider>();
 
         // Cast to interface types expected by PKSMApplication
         ITitleDataProvider::Ref titleProvider = std::static_pointer_cast<ITitleDataProvider>(titleProviderConcrete);
@@ -207,7 +216,7 @@ void PKSMApplication::ShowSettingsScreen() {
 
 void PKSMApplication::ShowTitleLoadScreen() {
     LOG_DEBUG("Switching to title load screen");
-    // unmount any save that may be mounted from previous save load
+    // unmount any save that may be mounted still from previous save load
     saveDataAccessor->unmountSaveDevice();
     this->LoadLayout(this->titleLoadScreen);
     // refresh the save list when returning to title load screen
@@ -240,11 +249,14 @@ void PKSMApplication::OnSaveSelected(pksm::titles::Title::Ref title, pksm::saves
     if (saveDataAccessor->loadSave(title, save->getPath())) {
         LOG_DEBUG("Successfully loaded save data");
 
+        utils::NotificationManager::Push("Save Loaded", save->getName() + " Loaded successfully.  (" + title->getName() + ")");
+
         // Now that the save is loaded, show the main menu
         this->ShowMainMenu();
     } else {
         LOG_ERROR("Failed to load save data");
-        // not switching screens if load failed
+
+        utils::NotificationManager::Push("Title Not Supported", title->getName() + " is not currently supported.");
     }
 }
 
