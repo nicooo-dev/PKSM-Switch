@@ -1,6 +1,6 @@
 # PKSM Switch Port
 
-This is the Nintendo Switch port of PKSM, a Pokémon save manager and editor.
+This is the Nintendo Switch port of PKSM, a Pokémon save manager and editor started by Omar-Kay and maintained by me, Nico.
 
 ## Application Architecture
 
@@ -593,3 +593,8 @@ If you're interested in contributing to the PKSM Switch port, please follow thes
    - Minimize UI updates and redraws
    - Cache rendered elements when possible
    - Be mindful of texture memory usage
+
+## Credits
+- Omar-Kay; for starting this tedious project from scratch!
+- nicooo-dev; which is me! I am currently maintaining this project!
+- And everyone else; Thank you to everyone how commited to PKSM for Switch!
