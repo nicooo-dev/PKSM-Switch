@@ -118,6 +118,8 @@ namespace pksm
                 SW = 44,
                 /// Pokémon Shield (NX)
                 SH = 45,
+                /// Pokémon Legends: Arceus (NX)
+                PLA = 47,
 
                 INVALID [[maybe_unused]] =
                     std::numeric_limits<std::underlying_type_t<GameVersionEnum>>::max()
@@ -125,10 +127,10 @@ namespace pksm
 
             constexpr explicit GameVersion_impl(GameVersionEnum v) : v(v) {}
 
-            constexpr GameVersion_impl(const GameVersion_impl&)            = default;
-            constexpr GameVersion_impl(GameVersion_impl&&)                 = default;
-            constexpr GameVersion_impl& operator=(const GameVersion_impl&) = default;
-            constexpr GameVersion_impl& operator=(GameVersion_impl&&)      = default;
+            constexpr GameVersion_impl(const GameVersion_impl &) = default;
+            constexpr GameVersion_impl(GameVersion_impl &&) = default;
+            constexpr GameVersion_impl &operator=(const GameVersion_impl &) = default;
+            constexpr GameVersion_impl &operator=(GameVersion_impl &&) = default;
 
         public:
             template <std::integral T>
@@ -141,53 +143,54 @@ namespace pksm
             {
                 switch (v)
                 {
-                    case GameVersionEnum::S:   // 1:
-                    case GameVersionEnum::R:   // 2:
-                    case GameVersionEnum::E:   // 3:
-                    case GameVersionEnum::FR:  // 4:
-                    case GameVersionEnum::LG:  // 5:
-                    case GameVersionEnum::CXD: // 15:
-                        return Generation::THREE;
-                    case GameVersionEnum::D:  // 10:
-                    case GameVersionEnum::P:  // 11:
-                    case GameVersionEnum::Pt: // 12:
-                    case GameVersionEnum::HG: // 7:
-                    case GameVersionEnum::SS: // 8:
-                        return Generation::FOUR;
-                    case GameVersionEnum::W:  // 20:
-                    case GameVersionEnum::B:  // 21:
-                    case GameVersionEnum::W2: // 22:
-                    case GameVersionEnum::B2: // 23:
-                        return Generation::FIVE;
-                    case GameVersionEnum::X:  // 24:
-                    case GameVersionEnum::Y:  // 25:
-                    case GameVersionEnum::AS: // 26:
-                    case GameVersionEnum::OR: // 27:
-                        return Generation::SIX;
-                    case GameVersionEnum::SN: // 30:
-                    case GameVersionEnum::MN: // 31:
-                    case GameVersionEnum::US: // 32:
-                    case GameVersionEnum::UM: // 33:
-                        return Generation::SEVEN;
-                    case GameVersionEnum::GP: // 42:
-                    case GameVersionEnum::GE: // 43:
-                        return Generation::LGPE;
-                    case GameVersionEnum::SW: // 44:
-                    case GameVersionEnum::SH: // 45:
-                        return Generation::EIGHT;
-                    case GameVersionEnum::RD: // 35:
-                    case GameVersionEnum::GN: // 36:
-                    case GameVersionEnum::BU: // 37:
-                    case GameVersionEnum::YW: // 38:
-                        return Generation::ONE;
-                    case GameVersionEnum::GD: // 39:
-                    case GameVersionEnum::SV: // 40:
-                    case GameVersionEnum::C:  // 41:
-                        return Generation::TWO;
-                    case GameVersionEnum::None: // 0:
-                    case GameVersionEnum::GO:   // 34:
-                    case GameVersionEnum::INVALID:
-                        return Generation::UNUSED;
+                case GameVersionEnum::S:   // 1:
+                case GameVersionEnum::R:   // 2:
+                case GameVersionEnum::E:   // 3:
+                case GameVersionEnum::FR:  // 4:
+                case GameVersionEnum::LG:  // 5:
+                case GameVersionEnum::CXD: // 15:
+                    return Generation::THREE;
+                case GameVersionEnum::D:  // 10:
+                case GameVersionEnum::P:  // 11:
+                case GameVersionEnum::Pt: // 12:
+                case GameVersionEnum::HG: // 7:
+                case GameVersionEnum::SS: // 8:
+                    return Generation::FOUR;
+                case GameVersionEnum::W:  // 20:
+                case GameVersionEnum::B:  // 21:
+                case GameVersionEnum::W2: // 22:
+                case GameVersionEnum::B2: // 23:
+                    return Generation::FIVE;
+                case GameVersionEnum::X:  // 24:
+                case GameVersionEnum::Y:  // 25:
+                case GameVersionEnum::AS: // 26:
+                case GameVersionEnum::OR: // 27:
+                    return Generation::SIX;
+                case GameVersionEnum::SN: // 30:
+                case GameVersionEnum::MN: // 31:
+                case GameVersionEnum::US: // 32:
+                case GameVersionEnum::UM: // 33:
+                    return Generation::SEVEN;
+                case GameVersionEnum::GP: // 42:
+                case GameVersionEnum::GE: // 43:
+                    return Generation::LGPE;
+                case GameVersionEnum::SW:  // 44:
+                case GameVersionEnum::SH:  // 45:
+                case GameVersionEnum::PLA: // 47:
+                    return Generation::EIGHT;
+                case GameVersionEnum::RD: // 35:
+                case GameVersionEnum::GN: // 36:
+                case GameVersionEnum::BU: // 37:
+                case GameVersionEnum::YW: // 38:
+                    return Generation::ONE;
+                case GameVersionEnum::GD: // 39:
+                case GameVersionEnum::SV: // 40:
+                case GameVersionEnum::C:  // 41:
+                    return Generation::TWO;
+                case GameVersionEnum::None: // 0:
+                case GameVersionEnum::GO:   // 34:
+                case GameVersionEnum::INVALID:
+                    return Generation::UNUSED;
                 }
                 return Generation::UNUSED;
             }
@@ -195,7 +198,7 @@ namespace pksm
             constexpr operator GameVersionEnum() const noexcept { return v; }
 
             [[nodiscard]] constexpr std::strong_ordering operator<=>(
-                const GameVersion_impl& other) const noexcept
+                const GameVersion_impl &other) const noexcept
             {
                 if (static_cast<Generation>(*this) == static_cast<Generation>(other))
                 {
@@ -216,7 +219,7 @@ namespace pksm
 
         constexpr GameVersion() noexcept : impl(EnumType::INVALID) {}
 
-        constexpr GameVersion(const internal::GameVersion_impl& impl) noexcept : impl(impl) {}
+        constexpr GameVersion(const internal::GameVersion_impl &impl) noexcept : impl(impl) {}
 
         constexpr explicit GameVersion(std::underlying_type_t<EnumType> v) noexcept
             : impl(EnumType{v})
@@ -236,62 +239,62 @@ namespace pksm
 
         constexpr operator EnumType() const noexcept { return static_cast<EnumType>(impl); }
 
-        static constexpr GameVersion newestVersion(const Generation& gen) noexcept
+        static constexpr GameVersion newestVersion(const Generation &gen) noexcept
         {
             switch (gen)
             {
-                case Generation::ONE:
-                    return GameVersion::YW;
-                case Generation::TWO:
-                    return GameVersion::C;
-                case Generation::THREE:
-                    return GameVersion::LG;
-                case Generation::FOUR:
-                    return GameVersion::HG;
-                case Generation::FIVE:
-                    return GameVersion::B2;
-                case Generation::SIX:
-                    return GameVersion::OR;
-                case Generation::SEVEN:
-                    return GameVersion::UM;
-                case Generation::EIGHT:
-                    return GameVersion::SH;
-                case Generation::LGPE:
-                    return GameVersion::GE;
-                default:
-                    return GameVersion::INVALID;
+            case Generation::ONE:
+                return GameVersion::YW;
+            case Generation::TWO:
+                return GameVersion::C;
+            case Generation::THREE:
+                return GameVersion::LG;
+            case Generation::FOUR:
+                return GameVersion::HG;
+            case Generation::FIVE:
+                return GameVersion::B2;
+            case Generation::SIX:
+                return GameVersion::OR;
+            case Generation::SEVEN:
+                return GameVersion::UM;
+            case Generation::EIGHT:
+                return GameVersion::SH;
+            case Generation::LGPE:
+                return GameVersion::GE;
+            default:
+                return GameVersion::INVALID;
             }
         }
 
-        static constexpr GameVersion oldestVersion(const Generation& gen) noexcept
+        static constexpr GameVersion oldestVersion(const Generation &gen) noexcept
         {
             switch (gen)
             {
-                case Generation::ONE:
-                    return GameVersion::RD;
-                case Generation::TWO:
-                    return GameVersion::GD;
-                case Generation::THREE:
-                    return GameVersion::S;
-                case Generation::FOUR:
-                    return GameVersion::D;
-                case Generation::FIVE:
-                    return GameVersion::W;
-                case Generation::SIX:
-                    return GameVersion::X;
-                case Generation::SEVEN:
-                    return GameVersion::SN;
-                case Generation::EIGHT:
-                    return GameVersion::SW;
-                case Generation::LGPE:
-                    return GameVersion::GP;
-                default:
-                    return GameVersion::INVALID;
+            case Generation::ONE:
+                return GameVersion::RD;
+            case Generation::TWO:
+                return GameVersion::GD;
+            case Generation::THREE:
+                return GameVersion::S;
+            case Generation::FOUR:
+                return GameVersion::D;
+            case Generation::FIVE:
+                return GameVersion::W;
+            case Generation::SIX:
+                return GameVersion::X;
+            case Generation::SEVEN:
+                return GameVersion::SN;
+            case Generation::EIGHT:
+                return GameVersion::SW;
+            case Generation::LGPE:
+                return GameVersion::GP;
+            default:
+                return GameVersion::INVALID;
             }
         }
 
         [[nodiscard]] constexpr std::strong_ordering operator<=>(
-            const GameVersion&) const noexcept = default;
+            const GameVersion &) const noexcept = default;
 
         static constexpr internal::GameVersion_impl None{EnumType::None};
         /// Pokémon Sapphire (GBA)
@@ -364,6 +367,8 @@ namespace pksm
         static constexpr internal::GameVersion_impl SW{EnumType::SW};
         /// Pokémon Shield (NX)
         static constexpr internal::GameVersion_impl SH{EnumType::SH};
+        /// Pokémon Legends: Arceus (NX)
+        static constexpr internal::GameVersion_impl PLA{EnumType::PLA};
 
         static constexpr internal::GameVersion_impl INVALID{EnumType::INVALID};
     };

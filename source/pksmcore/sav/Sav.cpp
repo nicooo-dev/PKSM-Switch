@@ -45,6 +45,7 @@
 #include "sav/SavHGSS.hpp"
 #include "sav/SavLGPE.hpp"
 #include "sav/SavORAS.hpp"
+#include "sav/SavPLA.hpp"
 #include "sav/SavPT.hpp"
 #include "sav/SavRS.hpp"
 #include "sav/SavSUMO.hpp"
@@ -105,6 +106,10 @@ namespace pksm
             case SavSWSH::SIZE_G8SWSH_3B:
             case SavSWSH::SIZE_G8SWSH_3C:
                 ret = std::make_unique<SavSWSH>(dt, length);
+                break;
+            case SavPLA::SIZE_G8PLA:
+            case SavPLA::SIZE_G8PLA_1:
+                ret = std::make_unique<SavPLA>(dt, length);
                 break;
             default:
                 ret = std::unique_ptr<Sav>(nullptr);

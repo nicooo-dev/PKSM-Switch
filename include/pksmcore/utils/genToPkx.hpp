@@ -28,9 +28,12 @@
 #define GENTOPKX_HPP
 
 #include "enums/Generation.hpp"
+#include <type_traits>
 
 namespace pksm
 {
+    class PA8;
+    class PB7;
     class PK1;
     class PK2;
     class PK3;
@@ -39,9 +42,8 @@ namespace pksm
     class PK6;
     class PK7;
     class PK8;
-    class PB7;
 
-    template <pksm::Generation::EnumType g>
+    template <pksm::Generation::EnumType>
     struct GenToPkx
     {
     };

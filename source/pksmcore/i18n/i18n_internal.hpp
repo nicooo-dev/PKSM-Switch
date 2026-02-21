@@ -33,8 +33,9 @@
 #include "utils/i18n.hpp"
 #include "utils/io.hpp"
 #include <atomic>
+#include <cstdio>
 #include <functional>
-#include <stdio.h>
+#include <sys/types.h>
 #include <time.h>
 #include <unordered_map>
 
@@ -46,7 +47,9 @@
 #define _PKSMCORE_GETLINE_FUNC getline
 #endif
 
-extern "C" ssize_t pksmcore_getline(char** lineptr, size_t* n, FILE* stream);
+#if defined(_PKSMCORE_CONFIGURED) || defined(_PKSMCORE_GETLINE_FUNC)
+extern "C" ssize_t pksmcore_getline(char **lineptr, size_t *n, FILE *stream);
+#endif
 
 #ifdef _PKSMCORE_EXTRA_LANGUAGES
 #define LANGUAGES_TO_USE JPN, ENG, FRE, ITA, GER, SPA, KOR, CHS, CHT, _PKSMCORE_EXTRA_LANGUAGES
@@ -54,7 +57,7 @@ extern "C" ssize_t pksmcore_getline(char** lineptr, size_t* n, FILE* stream);
 #define LANGUAGES_TO_USE JPN, ENG, FRE, ITA, GER, SPA, KOR, CHS, CHT
 #endif
 
-#define MAKE_GENERIC_LANGMAP(lang)                                                                 \
+#define MAKE_GENERIC_LANGMAP(lang) \
     ret.insert_or_assign(pksm::Language::lang, decltype(ret)::mapped_type{});
 
 namespace i18n
@@ -66,9 +69,9 @@ namespace i18n
         INITIALIZED
     };
 
-    inline const std::string emptyString                = "";
+    inline const std::string emptyString = "";
     inline const std::map<u16, std::string> emptyU16Map = {};
-    inline const std::map<u8, std::string> emptyU8Map   = {};
+    inline const std::map<u8, std::string> emptyU8Map = {};
 
 #ifdef _PKSMCORE_DISABLE_THREAD_SAFETY
     extern std::unordered_map<pksm::Language, LangState> languages;
@@ -97,17 +100,17 @@ namespace i18n
 
     std::string folder(pksm::Language lang);
 
-    void load(pksm::Language lang, const std::string& name, std::vector<std::string>& array);
+    void load(pksm::Language lang, const std::string &name, std::vector<std::string> &array);
 
     template <std::integral T>
-    void load(pksm::Language lang, const std::string& name, std::map<T, std::string>& map)
+    void load(pksm::Language lang, const std::string &name, std::map<T, std::string> &map)
     {
         std::string path = io::exists(_PKSMCORE_LANG_FOLDER + folder(lang) + name)
-                             ? _PKSMCORE_LANG_FOLDER + folder(lang) + name
-                             : _PKSMCORE_LANG_FOLDER + folder(pksm::Language::ENG) + name;
+                               ? _PKSMCORE_LANG_FOLDER + folder(lang) + name
+                               : _PKSMCORE_LANG_FOLDER + folder(pksm::Language::ENG) + name;
 
         std::string tmp;
-        FILE* values = fopen(path.c_str(), "rt");
+        FILE *values = fopen(path.c_str(), "rt");
         if (values)
         {
             if (ferror(values))
@@ -115,7 +118,7 @@ namespace i18n
                 fclose(values);
                 return;
             }
-            char* data  = static_cast<char*>(malloc(128));
+            char *data = static_cast<char *>(malloc(128));
             size_t size = 0;
             while (!feof(values) && !ferror(values))
             {
@@ -126,7 +129,7 @@ namespace i18n
                     tmp = tmp.substr(0, tmp.find('\n'));
                     // 0 automatically deduces the base: 0x prefix makes it hexadecimal, 0 prefix
                     // makes it octal
-                    T val    = std::stoll(tmp.substr(0, tmp.find('|')), 0, 0);
+                    T val = std::stoll(tmp.substr(0, tmp.find('|')), 0, 0);
                     map[val] = tmp.substr(0, tmp.find('\r')).substr(tmp.find('|') + 1);
                 }
                 else

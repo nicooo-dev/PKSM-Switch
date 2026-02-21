@@ -213,8 +213,19 @@ void BagScreen::BuildCategoriesForCurrentSave() {
 
     const bool is_swsh = (version == pksm::saves::GameVersion::SW) || (version == pksm::saves::GameVersion::SH);
     const bool is_lgpe = (version == pksm::saves::GameVersion::GP) || (version == pksm::saves::GameVersion::GE);
+    const bool is_pla = (version == pksm::saves::GameVersion::PLA);
 
-    if (is_lgpe) {
+    if (is_pla) {
+        categoryLabels = {
+            "Items",
+            "Key Items",
+        };
+
+        categoryPouches = {
+            pksm::saves::BagPouch::NormalItem,
+            pksm::saves::BagPouch::KeyItem,
+        };
+    } else if (is_lgpe) {
         categoryLabels = {
             "Medicine Pocket",
             "TM Case",
@@ -263,22 +274,10 @@ void BagScreen::BuildCategoriesForCurrentSave() {
     } else {
         categoryLabels = {
             "Items",
-            "Key Items",
-            "TMs",
-            "Medicine",
-            "Berries",
-            "Z-Crystals",
-            "Rotom Powers",
         };
 
         categoryPouches = {
             pksm::saves::BagPouch::NormalItem,
-            pksm::saves::BagPouch::KeyItem,
-            pksm::saves::BagPouch::TM,
-            pksm::saves::BagPouch::Medicine,
-            pksm::saves::BagPouch::Berry,
-            pksm::saves::BagPouch::ZCrystals,
-            pksm::saves::BagPouch::RotomPower,
         };
     }
 }

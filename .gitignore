@@ -8,3 +8,6 @@ PKSM.lst
 
 # vscode settings
 /.vscode/
+
+# my internal tools
+/tools/

@@ -234,6 +234,12 @@ namespace pksm
                     std::invoke([]() { return create_set_consecutive<int>(0, 1607); });
                 return items;
             }
+            case GameVersion::PLA:
+            {
+                static const std::set<int> items =
+                    std::invoke([]() { return create_set_consecutive<int>(0, 1828); });
+                return items;
+            }
             default:
                 return emptySet;
         }
@@ -381,6 +387,12 @@ namespace pksm
             {
                 static const std::set<Move> items = std::invoke(
                     []() { return create_set_consecutive<Move>(Move::None, Move::EerieSpell); });
+                return items;
+            }
+            case GameVersion::PLA:
+            {
+                static const std::set<Move> items = std::invoke(
+                    []() { return create_set_consecutive<Move>(Move::None, Move::TakeHeart); });
                 return items;
             }
             default:
@@ -672,6 +684,72 @@ namespace pksm
                     Species::Blacephalon};
                 return items;
             }
+            case GameVersion::PLA:
+            {
+                static const std::set<Species> items = {
+                    Species::Pikachu, Species::Raichu, Species::Clefairy, Species::Clefable,
+                    Species::Vulpix, Species::Ninetales, Species::Zubat, Species::Golbat,
+                    Species::Paras, Species::Parasect, Species::Psyduck, Species::Golduck,
+                    Species::Growlithe, Species::Arcanine, Species::Abra, Species::Kadabra,
+                    Species::Alakazam, Species::Machop, Species::Machoke, Species::Machamp,
+                    Species::Tentacool, Species::Tentacruel, Species::Geodude, Species::Graveler,
+                    Species::Golem, Species::Ponyta, Species::Rapidash, Species::Magnemite,
+                    Species::Magneton, Species::Gastly, Species::Haunter, Species::Gengar,
+                    Species::Onix, Species::Voltorb, Species::Electrode, Species::Lickitung,
+                    Species::Rhyhorn, Species::Rhydon, Species::Chansey, Species::Tangela,
+                    Species::MrMime, Species::Scyther, Species::Electabuzz, Species::Magmar,
+                    Species::Magikarp, Species::Gyarados, Species::Eevee, Species::Vaporeon,
+                    Species::Jolteon, Species::Flareon, Species::Porygon, Species::Snorlax,
+                    Species::Cyndaquil, Species::Quilava, Species::Typhlosion, Species::Crobat,
+                    Species::Pichu, Species::Cleffa, Species::Togepi, Species::Togetic,
+                    Species::Sudowoodo, Species::Aipom, Species::Yanma, Species::Espeon,
+                    Species::Umbreon, Species::Murkrow, Species::Misdreavus, Species::Unown,
+                    Species::Gligar, Species::Steelix, Species::Qwilfish, Species::Scizor,
+                    Species::Heracross, Species::Sneasel, Species::Teddiursa, Species::Ursaring,
+                    Species::Swinub, Species::Piloswine, Species::Remoraid, Species::Octillery,
+                    Species::Mantine, Species::Porygon2, Species::Stantler, Species::Elekid,
+                    Species::Magby, Species::Blissey, Species::Wurmple, Species::Silcoon,
+                    Species::Beautifly, Species::Cascoon, Species::Dustox, Species::Ralts,
+                    Species::Kirlia, Species::Gardevoir, Species::Nosepass, Species::Roselia,
+                    Species::Barboach, Species::Whiscash, Species::Duskull, Species::Dusclops,
+                    Species::Chimecho, Species::Snorunt, Species::Glalie, Species::Spheal,
+                    Species::Sealeo, Species::Walrein, Species::Turtwig, Species::Grotle,
+                    Species::Torterra, Species::Chimchar, Species::Monferno, Species::Infernape,
+                    Species::Piplup, Species::Prinplup, Species::Empoleon, Species::Starly,
+                    Species::Staravia, Species::Staraptor, Species::Bidoof, Species::Bibarel,
+                    Species::Kricketot, Species::Kricketune, Species::Shinx, Species::Luxio,
+                    Species::Luxray, Species::Budew, Species::Roserade, Species::Cranidos,
+                    Species::Rampardos, Species::Shieldon, Species::Bastiodon, Species::Burmy,
+                    Species::Wormadam, Species::Mothim, Species::Combee, Species::Vespiquen,
+                    Species::Pachirisu, Species::Buizel, Species::Floatzel, Species::Cherubi,
+                    Species::Cherrim, Species::Shellos, Species::Gastrodon, Species::Ambipom,
+                    Species::Drifloon, Species::Drifblim, Species::Buneary, Species::Lopunny,
+                    Species::Mismagius, Species::Honchkrow, Species::Glameow, Species::Purugly,
+                    Species::Chingling, Species::Stunky, Species::Skuntank, Species::Bronzor,
+                    Species::Bronzong, Species::Bonsly, Species::MimeJr, Species::Happiny,
+                    Species::Chatot, Species::Spiritomb, Species::Gible, Species::Gabite,
+                    Species::Garchomp, Species::Munchlax, Species::Riolu, Species::Lucario,
+                    Species::Hippopotas, Species::Hippowdon, Species::Skorupi, Species::Drapion,
+                    Species::Croagunk, Species::Toxicroak, Species::Carnivine, Species::Finneon,
+                    Species::Lumineon, Species::Mantyke, Species::Snover, Species::Abomasnow,
+                    Species::Weavile, Species::Magnezone, Species::Lickilicky, Species::Rhyperior,
+                    Species::Tangrowth, Species::Electivire, Species::Magmortar, Species::Togekiss,
+                    Species::Yanmega, Species::Leafeon, Species::Glaceon, Species::Gliscor,
+                    Species::Mamoswine, Species::PorygonZ, Species::Gallade, Species::Probopass,
+                    Species::Dusknoir, Species::Froslass, Species::Rotom, Species::Uxie,
+                    Species::Mesprit, Species::Azelf, Species::Dialga, Species::Palkia,
+                    Species::Heatran, Species::Regigigas, Species::Giratina, Species::Cresselia,
+                    Species::Phione, Species::Manaphy, Species::Darkrai, Species::Shaymin,
+                    Species::Arceus, Species::Oshawott, Species::Dewott, Species::Samurott,
+                    Species::Petilil, Species::Lilligant, Species::Basculin, Species::Zorua,
+                    Species::Zoroark, Species::Rufflet, Species::Braviary, Species::Tornadus,
+                    Species::Thundurus, Species::Landorus, Species::Sylveon, Species::Goomy,
+                    Species::Sliggoo, Species::Goodra, Species::Bergmite, Species::Avalugg,
+                    Species::Rowlet, Species::Dartrix, Species::Decidueye, Species::Wyrdeer,
+                    Species::Kleavor, Species::Ursaluna, Species::Basculegion, Species::Sneasler,
+                    Species::Overqwil, Species::Enamorus};
+                return items;
+            }
             default:
                 return emptySet;
         }
@@ -789,6 +867,12 @@ namespace pksm
                     { return create_set_consecutive<Ability>(Ability::Stench, Ability::AsOneG); });
                 return items;
             }
+            case GameVersion::PLA:
+            {
+                static const std::set<Ability> items = std::invoke([]()
+                    { return create_set_consecutive<Ability>(Ability::Stench, Ability::AsOneG); }); // according to PKHeX, max ability is also AsOneG?
+                return items;
+            }
             default:
                 return emptySet;
         }
@@ -797,6 +881,12 @@ namespace pksm
     const std::set<Ball>& VersionTables::availableBalls(GameVersion version)
     {
         static const std::set<Ball> emptySet;
+        if (version == GameVersion::PLA)
+        {
+            static const std::set<Ball> items = std::invoke(
+                []() { return create_set_consecutive<Ball>(Ball::Master, Ball::LAOrigin); });
+            return items;
+        }
         switch ((Generation)version)
         {
             case Generation::ONE:
@@ -895,6 +985,8 @@ namespace pksm
             case GameVersion::SW:
             case GameVersion::SH:
                 return 1607;
+            case GameVersion::PLA:
+                return 1828;
             default:
                 return 0;
         }
@@ -948,6 +1040,8 @@ namespace pksm
             case GameVersion::SW:
             case GameVersion::SH:
                 return Move::EerieSpell;
+            case GameVersion::PLA:
+                return Move::TakeHeart;
             default:
                 return Move::None;
         }
@@ -1000,6 +1094,8 @@ namespace pksm
             case GameVersion::SW:
             case GameVersion::SH:
                 return Species::Calyrex;
+            case GameVersion::PLA:
+                return Species::Enamorus;
             default:
                 return Species::None;
         }
@@ -1044,6 +1140,8 @@ namespace pksm
             case GameVersion::SW:
             case GameVersion::SH:
                 return Ability::AsOneG;
+            case GameVersion::PLA:
+                return Ability::AsOneG; // supposedly also AsOneG
             default:
                 return Ability::None;
         }
@@ -1051,6 +1149,10 @@ namespace pksm
 
     Ball VersionTables::maxBall(GameVersion version)
     {
+        if (version == GameVersion::PLA)
+        {
+            return Ball::LAOrigin;
+        }
         switch ((Generation)version)
         {
             case Generation::ONE:
@@ -1066,6 +1168,7 @@ namespace pksm
                 return Ball::Dream;
             case Generation::SEVEN:
             case Generation::LGPE:
+                return Ball::Beast;
             case Generation::EIGHT:
                 return Ball::Beast;
             default:
@@ -1165,12 +1268,14 @@ namespace pksm
             case GameVersion::SW:
             case GameVersion::SH:
                 return PersonalSWSH::formCount(u16(species));
+            case GameVersion::PLA:
+                return PersonalPLA::formCount(u16(species));
             default:
                 return 1;
         }
     }
 
-    u8 VersionTables::movePP(pksm::Generation gen, Move move, u8 ppUps)
+    u8 VersionTables::movePP(pksm::Generation gen, Move move, u8 ppUps) // TODO: implement PLA pp? not really sure
     {
         if (move == pksm::Move::INVALID || move == pksm::Move::None ||
             size_t(move) >= internal::PP_G8.size())

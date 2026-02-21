@@ -33,6 +33,7 @@
 #include "pkx/PK5.hpp"
 #include "pkx/PK6.hpp"
 #include "pkx/PK7.hpp"
+#include "pkx/PA8.hpp"
 #include "pkx/PK8.hpp"
 #include "pkx/PKFilter.hpp"
 #include "utils/endian.hpp"
@@ -556,6 +557,10 @@ namespace pksm
             case Generation::LGPE:
                 return getPKM<Generation::LGPE>(data, length, directAccess);
             case Generation::EIGHT:
+                if (length == PA8::BOX_LENGTH || length == PA8::PARTY_LENGTH)
+                {
+                    return getPKM<PA8>(data, length, directAccess);
+                }
                 return getPKM<Generation::EIGHT>(data, length, directAccess);
             case Generation::UNUSED:
                 return nullptr;
@@ -754,7 +759,15 @@ namespace pksm
                     partylen = PB7::PARTY_LENGTH;
                     break;
                 case Generation::EIGHT:
-                    partylen = PK8::PARTY_LENGTH;
+                    // Gen8 has multiple formats (SWSH PK8, PLA PA8). Use length heuristics.
+                    if (getLength() == PA8::BOX_LENGTH)
+                    {
+                        partylen = PA8::PARTY_LENGTH;
+                    }
+                    else
+                    {
+                        partylen = PK8::PARTY_LENGTH;
+                    }
                     break;
                 default:
                     partylen = 0;
