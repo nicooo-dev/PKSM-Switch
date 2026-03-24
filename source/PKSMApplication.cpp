@@ -265,6 +265,11 @@ void PKSMApplication::StartSpriteSyncIfNeeded() {
     spriteSyncDownloaded = 0;
     spriteSyncFailed = 0;
     spriteSyncNoProgressBatches = 0;
+    spriteSyncPhase = static_cast<int>(utils::SpriteAssetDownloader::ProgressInfo::Phase::None);
+    spriteSyncStageCurrent = 0;
+    spriteSyncStageTotal = 0;
+    spriteSyncUsedZip = false;
+    spriteSyncUsedFallback = false;
     spriteSyncStopRequested = false;
 
     if (spriteSyncWorker.joinable()) {
@@ -292,6 +297,9 @@ void PKSMApplication::StartSpriteSyncIfNeeded() {
 
     spriteSyncWorker = std::thread([this]() {
         try {
+            std::size_t cumulativeDownloaded = spriteSyncDownloaded.load(std::memory_order_relaxed);
+            std::size_t cumulativeFailed = spriteSyncFailed.load(std::memory_order_relaxed);
+
             while (!spriteSyncStopRequested.load(std::memory_order_relaxed)) {
                 const std::size_t total = spriteSyncTotal.load(std::memory_order_relaxed);
                 const std::size_t processed = spriteSyncProcessed.load(std::memory_order_relaxed);
@@ -301,18 +309,31 @@ void PKSMApplication::StartSpriteSyncIfNeeded() {
                 }
 
                 const std::size_t batchBaseProcessed = processed;
-                const std::size_t batchBaseDownloaded = spriteSyncDownloaded.load(std::memory_order_relaxed);
-                const std::size_t batchBaseFailed = spriteSyncFailed.load(std::memory_order_relaxed);
+                const std::size_t batchBaseDownloaded = cumulativeDownloaded;
+                const std::size_t batchBaseFailed = cumulativeFailed;
 
                 const auto sync = utils::SpriteAssetDownloader::SyncFromCdn(
                     "https://cdn.sigkill.tech/",
                     kSpriteSyncBatchMaxDownloads,
                     kSpriteSyncBatchMaxMilliseconds,
                     [this, total, batchBaseProcessed, batchBaseDownloaded, batchBaseFailed](const utils::SpriteAssetDownloader::ProgressInfo& info) {
-                        const std::size_t globalProcessed = std::min(total, batchBaseProcessed + info.processed);
-                        spriteSyncProcessed = globalProcessed;
-                        spriteSyncDownloaded = batchBaseDownloaded + info.downloaded;
-                        spriteSyncFailed = batchBaseFailed + info.failed;
+                        spriteSyncPhase = static_cast<int>(info.phase);
+                        spriteSyncStageCurrent = info.stageCurrent;
+                        spriteSyncStageTotal = info.stageTotal;
+
+                        if (info.usedZip) {
+                            spriteSyncUsedZip = true;
+                        }
+                        if (info.usingFallback) {
+                            spriteSyncUsedFallback = true;
+                        }
+
+                        if (info.phase == utils::SpriteAssetDownloader::ProgressInfo::Phase::IncrementalDownload) {
+                            const std::size_t globalProcessed = std::min(total, batchBaseProcessed + info.processed);
+                            spriteSyncProcessed = globalProcessed;
+                            spriteSyncDownloaded = batchBaseDownloaded + info.downloaded;
+                            spriteSyncFailed = batchBaseFailed + info.failed;
+                        }
                     }
                 );
 
@@ -320,10 +341,17 @@ void PKSMApplication::StartSpriteSyncIfNeeded() {
                     LOG_WARNING("Sprite asset sync warning: " + sync.error);
                 }
 
-                const std::size_t downloadedTotal = spriteSyncDownloaded.load(std::memory_order_relaxed) + sync.downloadedSprites;
-                const std::size_t failedTotal = spriteSyncFailed.load(std::memory_order_relaxed) + sync.failedSprites;
-                spriteSyncDownloaded = downloadedTotal;
-                spriteSyncFailed = failedTotal;
+                if (sync.usedZipPack) {
+                    spriteSyncUsedZip = true;
+                }
+                if (sync.zipFallbackTriggered) {
+                    spriteSyncUsedFallback = true;
+                }
+
+                cumulativeDownloaded += sync.downloadedSprites;
+                cumulativeFailed += sync.failedSprites;
+                spriteSyncDownloaded = cumulativeDownloaded;
+                spriteSyncFailed = cumulativeFailed;
                 spriteSyncRemaining = sync.remainingSprites;
 
                 const std::size_t newlyProcessed = sync.downloadedSprites + sync.failedSprites;
@@ -370,11 +398,10 @@ void PKSMApplication::UpdateStartupSyncUI() {
     const std::size_t processed = spriteSyncProcessed.load(std::memory_order_relaxed);
 
     if (spriteSyncRunning.load(std::memory_order_relaxed)) {
-        if (total == 0) {
-            spriteSyncRunning = false;
-            spriteSyncDone = true;
-            return;
-        }
+        using SyncPhase = utils::SpriteAssetDownloader::ProgressInfo::Phase;
+        const auto phase = static_cast<SyncPhase>(spriteSyncPhase.load(std::memory_order_relaxed));
+        const std::size_t stageCurrent = spriteSyncStageCurrent.load(std::memory_order_relaxed);
+        const std::size_t stageTotal = spriteSyncStageTotal.load(std::memory_order_relaxed);
 
         static const std::array<const char*, 4> dots = {"", ".", "..", "..."};
         const auto dotIndex = static_cast<std::size_t>(
@@ -382,6 +409,48 @@ void PKSMApplication::UpdateStartupSyncUI() {
                  std::chrono::steady_clock::now().time_since_epoch()
              ).count() / 350) % static_cast<long long>(dots.size())
         );
+
+        if (phase == SyncPhase::ZipDownload) {
+            float progress = 0.0f;
+            if (stageTotal > 0) {
+                progress = static_cast<float>(stageCurrent) / static_cast<float>(stageTotal);
+            }
+            startupScreen->SetProgress(progress);
+
+            std::string text = "Downloading sprite pack";
+            if (stageTotal > 0) {
+                text += " "
+                    + std::to_string(stageCurrent / 1024)
+                    + "/"
+                    + std::to_string(stageTotal / 1024)
+                    + "KB";
+            }
+            text += dots[dotIndex];
+            startupScreen->SetLoadingText(text);
+            return;
+        }
+
+        if (phase == SyncPhase::ZipExtract) {
+            float progress = 0.0f;
+            if (stageTotal > 0) {
+                progress = static_cast<float>(stageCurrent) / static_cast<float>(stageTotal);
+            }
+            startupScreen->SetProgress(progress);
+            startupScreen->SetLoadingText(
+                "Extracting sprite pack "
+                + std::to_string(stageCurrent)
+                + "/"
+                + std::to_string(stageTotal)
+                + dots[dotIndex]
+            );
+            return;
+        }
+
+        if (total == 0) {
+            startupScreen->SetProgress(0.0f);
+            startupScreen->SetLoadingText("Preparing sprite sync" + std::string(dots[dotIndex]));
+            return;
+        }
 
         startupScreen->SetProgress(static_cast<float>(processed) / static_cast<float>(total));
         startupScreen->SetLoadingText(
@@ -410,6 +479,8 @@ void PKSMApplication::UpdateStartupSyncUI() {
         const std::size_t downloaded = spriteSyncDownloaded.load(std::memory_order_relaxed);
         const std::size_t failed = spriteSyncFailed.load(std::memory_order_relaxed);
         const std::size_t remaining = spriteSyncRemaining.load(std::memory_order_relaxed);
+        const bool usedZip = spriteSyncUsedZip.load(std::memory_order_relaxed);
+        const bool usedFallback = spriteSyncUsedFallback.load(std::memory_order_relaxed);
 
         startupScreen->SetLoadingText("Sprite sync complete");
 
@@ -419,6 +490,12 @@ void PKSMApplication::UpdateStartupSyncUI() {
         }
         if (remaining > 0) {
             body += ", " + std::to_string(remaining) + " remaining";
+        }
+        if (usedZip) {
+            body += ", zip pack used";
+        }
+        if (usedFallback) {
+            body += ", fallback incremental used";
         }
         utils::NotificationManager::Push("Sprites", body);
         LOG_INFO("Sprite assets sync complete: " + body);

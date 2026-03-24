@@ -13,17 +13,23 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <initializer_list>
+#include <limits>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <mutex>
 #include <sstream>
 #include <string>
+#include <system_error>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
+#include <zlib.h>
+
 #include <switch.h>
 
+#include "pksmcore/utils/crypto.hpp"
 #include "utils/Logger.hpp"
 
 namespace pksm::utils {
@@ -31,10 +37,17 @@ namespace pksm::utils {
 namespace {
 
 constexpr const char* SD_DATA_JSON = "sdmc:/switch/PKSM/assets/data.json";
+constexpr const char* SD_ASSETS_DIR = "sdmc:/switch/PKSM/assets";
+constexpr const char* SD_ASSETS_STAGING_DIR = "sdmc:/switch/PKSM/assets_staging";
+constexpr const char* SD_ASSETS_BACKUP_DIR = "sdmc:/switch/PKSM/assets_backup_tmp";
+constexpr const char* SD_SPRITES_PACK_TEMP = "sdmc:/switch/PKSM/assets/sprites-pack.zip.tmp";
+constexpr const char* SD_SPRITES_PACK_MANIFEST = "sdmc:/switch/PKSM/assets/sprites-pack-manifest.json";
 constexpr const char* SD_SPRITES_DIR = "sdmc:/switch/PKSM/assets/sprites";
 constexpr const char* SD_KNOWN_MISSING_SPRITES = "sdmc:/switch/PKSM/assets/known_missing_sprites.txt";
 constexpr const char* ROMFS_DATA_JSON = "romfs:/gfx/data/data.json";
 constexpr const char* POKESPRITE_BASE = "https://raw.githubusercontent.com/msikma/pokesprite/master";
+constexpr const char* ZIP_PACK_ENDPOINT = "/assets/sprites-pack.zip";
+constexpr const char* ZIP_MANIFEST_ENDPOINT = "/assets/sprites-pack-manifest.json";
 
 struct UrlParts {
     bool https = true;
@@ -48,6 +61,66 @@ struct HttpResponse {
     std::unordered_map<std::string, std::string> headers;
     std::vector<u8> body;
 };
+
+struct ZipEntryRecord {
+    std::string entryName;
+    u16 flags = 0;
+    u16 method = 0;
+    u32 crc32 = 0;
+    u32 compressedSize = 0;
+    u32 uncompressedSize = 0;
+    u32 localHeaderOffset = 0;
+};
+
+struct TargetZipEntry {
+    ZipEntryRecord record;
+    std::filesystem::path relativeOutput;
+    bool isDataJson = false;
+};
+
+struct ZipPackManifest {
+    std::optional<std::string> zipSha256;
+    std::optional<std::string> dataJsonSha256;
+    std::optional<std::size_t> spritesCount;
+};
+
+struct ZipExtractionSummary {
+    std::vector<u8> dataJsonBytes;
+    std::size_t extractedSprites = 0;
+};
+
+struct ZipPackApplyResult {
+    bool attempted = false;
+    bool succeeded = false;
+    bool verified = false;
+    std::size_t resolvedSprites = 0;
+    std::string error;
+};
+
+u16 ReadLe16(const u8* ptr) {
+    return static_cast<u16>(ptr[0] | (static_cast<u16>(ptr[1]) << 8));
+}
+
+u32 ReadLe32(const u8* ptr) {
+    return static_cast<u32>(
+        ptr[0]
+        | (static_cast<u32>(ptr[1]) << 8)
+        | (static_cast<u32>(ptr[2]) << 16)
+        | (static_cast<u32>(ptr[3]) << 24)
+    );
+}
+
+template <std::size_t N>
+std::string BytesToHexLower(const std::array<u8, N>& bytes) {
+    static constexpr char kHex[] = "0123456789abcdef";
+    std::string out;
+    out.resize(N * 2);
+    for (std::size_t i = 0; i < N; ++i) {
+        out[(i * 2) + 0] = kHex[(bytes[i] >> 4) & 0x0F];
+        out[(i * 2) + 1] = kHex[bytes[i] & 0x0F];
+    }
+    return out;
+}
 
 std::string ToLower(std::string v) {
     std::transform(v.begin(), v.end(), v.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -373,7 +446,12 @@ bool SendAllPlain(int sockfd, const std::string& req, std::string& err) {
     return true;
 }
 
-bool RecvAllPlain(int sockfd, std::vector<u8>& out, std::string& err) {
+bool RecvAllPlain(
+    int sockfd,
+    std::vector<u8>& out,
+    std::string& err,
+    const std::function<void(std::size_t)>& onBytesReceived = nullptr
+) {
     std::array<u8, 0x4000> buf{};
     while (true) {
         const ssize_t n = ::recv(sockfd, buf.data(), buf.size(), 0);
@@ -385,6 +463,9 @@ bool RecvAllPlain(int sockfd, std::vector<u8>& out, std::string& err) {
             return false;
         }
         out.insert(out.end(), buf.begin(), buf.begin() + n);
+        if (onBytesReceived) {
+            onBytesReceived(out.size());
+        }
     }
     return true;
 }
@@ -407,7 +488,12 @@ bool SendAllTls(SslConnection& conn, const std::string& req, std::string& err) {
     return true;
 }
 
-bool RecvAllTls(SslConnection& conn, std::vector<u8>& out, std::string& err) {
+bool RecvAllTls(
+    SslConnection& conn,
+    std::vector<u8>& out,
+    std::string& err,
+    const std::function<void(std::size_t)>& onBytesReceived = nullptr
+) {
     std::array<u8, 0x4000> buf{};
     while (true) {
         u32 read = 0;
@@ -422,11 +508,20 @@ bool RecvAllTls(SslConnection& conn, std::vector<u8>& out, std::string& err) {
             break;
         }
         out.insert(out.end(), buf.begin(), buf.begin() + read);
+        if (onBytesReceived) {
+            onBytesReceived(out.size());
+        }
     }
     return true;
 }
 
-bool HttpGet(const std::string& url, HttpResponse& out, std::string& err, int redirectDepth = 0) {
+bool HttpGet(
+    const std::string& url,
+    HttpResponse& out,
+    std::string& err,
+    int redirectDepth = 0,
+    const std::function<void(std::size_t, std::size_t)>& onDownloadProgress = nullptr
+) {
     if (redirectDepth > 5) {
         err = "Too many HTTP redirects";
         return false;
@@ -528,11 +623,73 @@ bool HttpGet(const std::string& url, HttpResponse& out, std::string& err, int re
         "Connection: close\r\n\r\n";
 
     std::vector<u8> raw;
+
+    bool headerParsed = false;
+    std::size_t bodyOffset = 0;
+    std::optional<std::size_t> contentLength;
+
+    auto publishDownloadProgress = [&]() {
+        if (!onDownloadProgress) {
+            return;
+        }
+
+        if (!headerParsed) {
+            static const std::string marker = "\r\n\r\n";
+            const auto headerEnd = std::search(raw.begin(), raw.end(), marker.begin(), marker.end());
+            if (headerEnd != raw.end()) {
+                headerParsed = true;
+                const std::size_t headerLen = static_cast<std::size_t>(std::distance(raw.begin(), headerEnd));
+                bodyOffset = headerLen + marker.size();
+
+                std::string headerText(reinterpret_cast<const char*>(raw.data()), headerLen);
+                std::istringstream stream(headerText);
+                std::string line;
+                std::getline(stream, line); // status line
+                while (std::getline(stream, line)) {
+                    line = Trim(line);
+                    if (line.empty()) {
+                        continue;
+                    }
+                    const auto colon = line.find(':');
+                    if (colon == std::string::npos) {
+                        continue;
+                    }
+                    const std::string key = ToLower(Trim(line.substr(0, colon)));
+                    if (key != "content-length") {
+                        continue;
+                    }
+
+                    const std::string value = Trim(line.substr(colon + 1));
+                    try {
+                        contentLength = static_cast<std::size_t>(std::stoull(value));
+                    } catch (...) {
+                        contentLength.reset();
+                    }
+                    break;
+                }
+            }
+        }
+
+        if (!headerParsed || raw.size() < bodyOffset) {
+            onDownloadProgress(0, contentLength.value_or(0));
+            return;
+        }
+
+        const std::size_t received = raw.size() - bodyOffset;
+        onDownloadProgress(received, contentLength.value_or(0));
+    };
+
     bool ioOk = false;
     if (parts.https) {
-        ioOk = SendAllTls(sslConn, request, err) && RecvAllTls(sslConn, raw, err);
+        ioOk = SendAllTls(sslConn, request, err)
+            && RecvAllTls(sslConn, raw, err, [&publishDownloadProgress](std::size_t) {
+                publishDownloadProgress();
+            });
     } else {
-        ioOk = SendAllPlain(sockfd, request, err) && RecvAllPlain(sockfd, raw, err);
+        ioOk = SendAllPlain(sockfd, request, err)
+            && RecvAllPlain(sockfd, raw, err, [&publishDownloadProgress](std::size_t) {
+                publishDownloadProgress();
+            });
     }
 
     closeTls();
@@ -542,9 +699,15 @@ bool HttpGet(const std::string& url, HttpResponse& out, std::string& err, int re
         return false;
     }
 
+    publishDownloadProgress();
+
     HttpResponse response;
     if (!ParseHttpResponse(raw, response, err)) {
         return false;
+    }
+
+    if (onDownloadProgress) {
+        onDownloadProgress(response.body.size(), response.body.size());
     }
 
     if (response.statusCode == 301 || response.statusCode == 302 || response.statusCode == 307 || response.statusCode == 308) {
@@ -558,7 +721,7 @@ bool HttpGet(const std::string& url, HttpResponse& out, std::string& err, int re
         if (StartsWith(redirectUrl, "/")) {
             redirectUrl = (parts.https ? "https://" : "http://") + parts.host + redirectUrl;
         }
-        return HttpGet(redirectUrl, out, err, redirectDepth + 1);
+        return HttpGet(redirectUrl, out, err, redirectDepth + 1, onDownloadProgress);
     }
 
     out = std::move(response);
@@ -649,6 +812,805 @@ bool SaveKnownMissingSprites(const std::unordered_set<std::string>& knownMissing
     }
 
     return true;
+}
+
+bool BuildMissingSpriteListFromData(
+    const std::vector<u8>& dataJsonBytes,
+    std::vector<std::string>& outMissing,
+    std::size_t& outPresent,
+    std::string& err
+);
+
+std::string NormalizeHexString(std::string value) {
+    value = Trim(ToLower(value));
+    if (StartsWith(value, "0x")) {
+        value = value.substr(2);
+    }
+    return value;
+}
+
+bool IsValidHexDigest(const std::string& value, std::size_t expectedLen) {
+    if (value.size() != expectedLen) {
+        return false;
+    }
+    for (const unsigned char c : value) {
+        if (!std::isxdigit(c)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+const nlohmann::json* FindManifestValue(const nlohmann::json& parsed, const std::initializer_list<const char*>& keys) {
+    for (const auto* key : keys) {
+        if (parsed.contains(key)) {
+            return &parsed.at(key);
+        }
+    }
+
+    for (auto it = parsed.begin(); it != parsed.end(); ++it) {
+        const std::string loweredKey = ToLower(it.key());
+        for (const auto* key : keys) {
+            if (loweredKey == ToLower(key)) {
+                return &it.value();
+            }
+        }
+    }
+
+    return nullptr;
+}
+
+bool ParseZipPackManifest(const std::vector<u8>& bytes, ZipPackManifest& outManifest, std::string& err) {
+    if (bytes.empty()) {
+        err = "Manifest payload is empty";
+        return false;
+    }
+
+    std::string text(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+    nlohmann::json parsed = nlohmann::json::parse(text, nullptr, false);
+    if (parsed.is_discarded() || !parsed.is_object()) {
+        err = "Manifest is not a valid JSON object";
+        return false;
+    }
+
+    if (const auto* value = FindManifestValue(parsed, {"zip_sha256", "pack_sha256", "sprites_pack_sha256", "sha256"}); value && value->is_string()) {
+        const std::string hash = NormalizeHexString(value->get<std::string>());
+        if (!IsValidHexDigest(hash, 64)) {
+            err = "Manifest zip hash is invalid";
+            return false;
+        }
+        outManifest.zipSha256 = hash;
+    }
+
+    if (const auto* value = FindManifestValue(parsed, {"data_json_sha256", "data_sha256"}); value && value->is_string()) {
+        const std::string hash = NormalizeHexString(value->get<std::string>());
+        if (!IsValidHexDigest(hash, 64)) {
+            err = "Manifest data.json hash is invalid";
+            return false;
+        }
+        outManifest.dataJsonSha256 = hash;
+    }
+
+    if (const auto* value = FindManifestValue(parsed, {"sprites_count", "sprite_count", "count"}); value) {
+        if (value->is_number_unsigned()) {
+            outManifest.spritesCount = value->get<std::size_t>();
+        } else if (value->is_number_integer()) {
+            const auto signedCount = value->get<long long>();
+            if (signedCount < 0) {
+                err = "Manifest sprites_count cannot be negative";
+                return false;
+            }
+            outManifest.spritesCount = static_cast<std::size_t>(signedCount);
+        } else if (value->is_string()) {
+            try {
+                outManifest.spritesCount = static_cast<std::size_t>(std::stoull(value->get<std::string>()));
+            } catch (...) {
+                err = "Manifest sprites_count is not numeric";
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+std::string ComputeSha256Hex(const std::vector<u8>& bytes) {
+    return BytesToHexLower(pksm::crypto::sha256(bytes));
+}
+
+std::string NormalizeZipEntryName(std::string entryName) {
+    std::replace(entryName.begin(), entryName.end(), '\\', '/');
+    while (StartsWith(entryName, "./")) {
+        entryName = entryName.substr(2);
+    }
+    while (!entryName.empty() && entryName.front() == '/') {
+        entryName.erase(entryName.begin());
+    }
+
+    const std::string lowered = ToLower(entryName);
+    if (StartsWith(lowered, "assets/")) {
+        entryName = entryName.substr(std::strlen("assets/"));
+    }
+    return entryName;
+}
+
+bool IsSafeZipRelativePath(const std::string& relativePath) {
+    if (relativePath.empty()) {
+        return false;
+    }
+
+    std::size_t segmentStart = 0;
+    while (segmentStart < relativePath.size()) {
+        const auto slash = relativePath.find('/', segmentStart);
+        const std::size_t segmentEnd = (slash == std::string::npos) ? relativePath.size() : slash;
+        const std::string segment = relativePath.substr(segmentStart, segmentEnd - segmentStart);
+        if (segment.empty() || segment == "." || segment == "..") {
+            return false;
+        }
+        if (slash == std::string::npos) {
+            break;
+        }
+        segmentStart = slash + 1;
+    }
+
+    return true;
+}
+
+bool ParseZipCentralDirectory(const std::vector<u8>& zipBytes, std::vector<ZipEntryRecord>& outEntries, std::string& err) {
+    constexpr std::size_t kEocdMinSize = 22;
+    constexpr u32 kEocdSignature = 0x06054B50;
+    constexpr u32 kCentralFileHeaderSignature = 0x02014B50;
+
+    outEntries.clear();
+
+    if (zipBytes.size() < kEocdMinSize) {
+        err = "ZIP payload is too small";
+        return false;
+    }
+
+    const std::size_t searchStart = (zipBytes.size() > (0xFFFF + kEocdMinSize))
+        ? (zipBytes.size() - (0xFFFF + kEocdMinSize))
+        : 0;
+
+    std::optional<std::size_t> eocdOffset;
+    for (std::size_t pos = zipBytes.size() - kEocdMinSize;; --pos) {
+        if (ReadLe32(zipBytes.data() + pos) == kEocdSignature) {
+            eocdOffset = pos;
+            break;
+        }
+        if (pos == searchStart) {
+            break;
+        }
+    }
+
+    if (!eocdOffset.has_value()) {
+        err = "ZIP end-of-central-directory record not found";
+        return false;
+    }
+
+    const u8* eocd = zipBytes.data() + *eocdOffset;
+    const u16 diskNumber = ReadLe16(eocd + 4);
+    const u16 centralDisk = ReadLe16(eocd + 6);
+    const u16 entriesOnDisk = ReadLe16(eocd + 8);
+    const u16 entriesTotal = ReadLe16(eocd + 10);
+    const u32 centralSize = ReadLe32(eocd + 12);
+    const u32 centralOffset = ReadLe32(eocd + 16);
+    const u16 commentLength = ReadLe16(eocd + 20);
+
+    if (*eocdOffset + kEocdMinSize + commentLength > zipBytes.size()) {
+        err = "ZIP EOCD comment length is invalid";
+        return false;
+    }
+
+    if (diskNumber != 0 || centralDisk != 0 || entriesOnDisk != entriesTotal) {
+        err = "ZIP multi-disk archives are not supported";
+        return false;
+    }
+
+    if (entriesTotal == 0xFFFF || centralSize == 0xFFFFFFFFU || centralOffset == 0xFFFFFFFFU) {
+        err = "ZIP64 archives are not supported";
+        return false;
+    }
+
+    const std::size_t centralStart = static_cast<std::size_t>(centralOffset);
+    const std::size_t centralEnd = centralStart + static_cast<std::size_t>(centralSize);
+    if (centralStart >= zipBytes.size() || centralEnd > zipBytes.size()) {
+        err = "ZIP central directory range is invalid";
+        return false;
+    }
+
+    std::size_t cursor = centralStart;
+    outEntries.reserve(entriesTotal);
+    for (u16 i = 0; i < entriesTotal; ++i) {
+        if (cursor + 46 > zipBytes.size()) {
+            err = "ZIP central directory entry is truncated";
+            return false;
+        }
+
+        const u8* header = zipBytes.data() + cursor;
+        if (ReadLe32(header) != kCentralFileHeaderSignature) {
+            err = "ZIP central directory signature mismatch";
+            return false;
+        }
+
+        const u16 fileNameLen = ReadLe16(header + 28);
+        const u16 extraLen = ReadLe16(header + 30);
+        const u16 commentLen = ReadLe16(header + 32);
+
+        const std::size_t nameOffset = cursor + 46;
+        const std::size_t nextEntry = nameOffset + static_cast<std::size_t>(fileNameLen)
+            + static_cast<std::size_t>(extraLen)
+            + static_cast<std::size_t>(commentLen);
+        if (nextEntry > zipBytes.size()) {
+            err = "ZIP central directory entry overflows payload";
+            return false;
+        }
+
+        ZipEntryRecord record;
+        record.flags = ReadLe16(header + 8);
+        record.method = ReadLe16(header + 10);
+        record.crc32 = ReadLe32(header + 16);
+        record.compressedSize = ReadLe32(header + 20);
+        record.uncompressedSize = ReadLe32(header + 24);
+        record.localHeaderOffset = ReadLe32(header + 42);
+        record.entryName.assign(
+            reinterpret_cast<const char*>(zipBytes.data() + nameOffset),
+            static_cast<std::size_t>(fileNameLen)
+        );
+
+        outEntries.push_back(std::move(record));
+        cursor = nextEntry;
+    }
+
+    if (cursor > centralEnd) {
+        err = "ZIP central directory cursor overflow";
+        return false;
+    }
+
+    return true;
+}
+
+bool BuildTargetZipEntries(const std::vector<ZipEntryRecord>& records, std::vector<TargetZipEntry>& outTargets, std::string& err) {
+    outTargets.clear();
+
+    bool hasDataJson = false;
+    std::size_t spriteEntries = 0;
+    std::unordered_set<std::string> seenOutputs;
+
+    for (const auto& record : records) {
+        std::string entryName = NormalizeZipEntryName(record.entryName);
+        if (entryName.empty() || EndsWith(entryName, "/")) {
+            continue;
+        }
+
+        if (!IsSafeZipRelativePath(entryName)) {
+            continue;
+        }
+
+        const std::string loweredEntry = ToLower(entryName);
+        TargetZipEntry target;
+        bool isTarget = false;
+
+        if (loweredEntry == "data.json") {
+            target.relativeOutput = std::filesystem::path("data.json");
+            target.isDataJson = true;
+            isTarget = true;
+        } else if (StartsWith(loweredEntry, "sprites/")) {
+            const std::string spriteName = entryName.substr(std::strlen("sprites/"));
+            if (spriteName.empty() || spriteName.find('/') != std::string::npos) {
+                continue;
+            }
+            if (!EndsWith(ToLower(spriteName), ".png")) {
+                continue;
+            }
+
+            target.relativeOutput = std::filesystem::path("sprites") / spriteName;
+            target.isDataJson = false;
+            isTarget = true;
+        }
+
+        if (!isTarget) {
+            continue;
+        }
+
+        if ((record.flags & 0x0001U) != 0U) {
+            err = "ZIP encryption is not supported";
+            return false;
+        }
+
+        if (record.method != 0 && record.method != 8) {
+            err = "ZIP compression method is not supported";
+            return false;
+        }
+
+        const std::string dedupeKey = ToLower(target.relativeOutput.generic_string());
+        if (!seenOutputs.insert(dedupeKey).second) {
+            continue;
+        }
+
+        target.record = record;
+        outTargets.push_back(std::move(target));
+
+        if (outTargets.back().isDataJson) {
+            hasDataJson = true;
+        } else {
+            ++spriteEntries;
+        }
+    }
+
+    if (!hasDataJson) {
+        err = "ZIP pack does not contain data.json";
+        return false;
+    }
+    if (spriteEntries == 0) {
+        err = "ZIP pack does not contain any sprite files";
+        return false;
+    }
+
+    return true;
+}
+
+bool InflateRawDeflate(
+    const u8* compressedData,
+    std::size_t compressedSize,
+    std::size_t expectedSize,
+    std::vector<u8>& out,
+    std::string& err
+) {
+    if (compressedSize > std::numeric_limits<uInt>::max()) {
+        err = "Compressed ZIP entry is too large";
+        return false;
+    }
+
+    z_stream stream{};
+    stream.next_in = const_cast<Bytef*>(reinterpret_cast<const Bytef*>(compressedData));
+    stream.avail_in = static_cast<uInt>(compressedSize);
+
+    const int initRc = inflateInit2(&stream, -MAX_WBITS);
+    if (initRc != Z_OK) {
+        err = "Failed to initialize zlib inflater";
+        return false;
+    }
+
+    std::array<u8, 16 * 1024> chunk{};
+    out.clear();
+    if (expectedSize > 0) {
+        out.reserve(expectedSize);
+    }
+
+    int rc = Z_OK;
+    while (rc != Z_STREAM_END) {
+        stream.next_out = chunk.data();
+        stream.avail_out = static_cast<uInt>(chunk.size());
+
+        rc = inflate(&stream, Z_NO_FLUSH);
+        if (rc != Z_OK && rc != Z_STREAM_END) {
+            inflateEnd(&stream);
+            err = "zlib inflate failed with code " + std::to_string(rc);
+            return false;
+        }
+
+        const std::size_t produced = chunk.size() - static_cast<std::size_t>(stream.avail_out);
+        out.insert(out.end(), chunk.begin(), chunk.begin() + static_cast<std::ptrdiff_t>(produced));
+
+        if (expectedSize > 0 && out.size() > expectedSize) {
+            inflateEnd(&stream);
+            err = "Inflated ZIP entry exceeds expected size";
+            return false;
+        }
+
+        if (stream.avail_in == 0 && produced == 0 && rc != Z_STREAM_END) {
+            inflateEnd(&stream);
+            err = "Inflated ZIP entry ended unexpectedly";
+            return false;
+        }
+    }
+
+    inflateEnd(&stream);
+
+    if (expectedSize > 0 && out.size() != expectedSize) {
+        err = "Inflated ZIP entry size mismatch";
+        return false;
+    }
+
+    return true;
+}
+
+bool ExtractZipEntryPayload(const std::vector<u8>& zipBytes, const ZipEntryRecord& record, std::vector<u8>& out, std::string& err) {
+    constexpr u32 kLocalHeaderSignature = 0x04034B50;
+
+    const std::size_t localHeader = static_cast<std::size_t>(record.localHeaderOffset);
+    if (localHeader + 30 > zipBytes.size()) {
+        err = "ZIP local header is out of range";
+        return false;
+    }
+
+    const u8* header = zipBytes.data() + localHeader;
+    if (ReadLe32(header) != kLocalHeaderSignature) {
+        err = "ZIP local header signature mismatch";
+        return false;
+    }
+
+    const std::size_t fileNameLen = static_cast<std::size_t>(ReadLe16(header + 26));
+    const std::size_t extraLen = static_cast<std::size_t>(ReadLe16(header + 28));
+    const std::size_t payloadOffset = localHeader + 30 + fileNameLen + extraLen;
+    const std::size_t compressedSize = static_cast<std::size_t>(record.compressedSize);
+
+    if (payloadOffset > zipBytes.size() || compressedSize > (zipBytes.size() - payloadOffset)) {
+        err = "ZIP entry payload range is invalid";
+        return false;
+    }
+
+    const u8* compressed = zipBytes.data() + payloadOffset;
+    const std::size_t expectedSize = static_cast<std::size_t>(record.uncompressedSize);
+
+    if (record.method == 0) {
+        out.assign(compressed, compressed + compressedSize);
+        if (out.size() != expectedSize) {
+            err = "Stored ZIP entry size mismatch";
+            return false;
+        }
+    } else if (record.method == 8) {
+        if (!InflateRawDeflate(compressed, compressedSize, expectedSize, out, err)) {
+            return false;
+        }
+    } else {
+        err = "Unsupported ZIP compression method";
+        return false;
+    }
+
+    if (out.size() > std::numeric_limits<uInt>::max()) {
+        err = "ZIP entry is too large for CRC verification";
+        return false;
+    }
+
+    uLong computedCrc = crc32(0L, Z_NULL, 0);
+    if (!out.empty()) {
+        computedCrc = crc32(computedCrc, out.data(), static_cast<uInt>(out.size()));
+    }
+
+    if (static_cast<u32>(computedCrc) != record.crc32) {
+        err = "ZIP entry CRC mismatch";
+        return false;
+    }
+
+    return true;
+}
+
+bool ExtractZipPackToStaging(
+    const std::vector<u8>& zipBytes,
+    const std::function<void(const SpriteAssetDownloader::ProgressInfo&)>& onProgress,
+    ZipExtractionSummary& outSummary,
+    std::string& err
+) {
+    std::error_code fsErr;
+    std::filesystem::remove_all(SD_ASSETS_STAGING_DIR, fsErr);
+    fsErr.clear();
+
+    std::filesystem::create_directories(SD_ASSETS_STAGING_DIR, fsErr);
+    if (fsErr) {
+        err = "Failed to create staging directory: " + fsErr.message();
+        return false;
+    }
+
+    std::vector<ZipEntryRecord> records;
+    if (!ParseZipCentralDirectory(zipBytes, records, err)) {
+        return false;
+    }
+
+    std::vector<TargetZipEntry> targets;
+    if (!BuildTargetZipEntries(records, targets, err)) {
+        return false;
+    }
+
+    if (onProgress) {
+        SpriteAssetDownloader::ProgressInfo info;
+        info.phase = SpriteAssetDownloader::ProgressInfo::Phase::ZipExtract;
+        info.usedZip = true;
+        info.stageCurrent = 0;
+        info.stageTotal = targets.size();
+        onProgress(info);
+    }
+
+    outSummary = {};
+
+    const auto stagingRoot = std::filesystem::path(SD_ASSETS_STAGING_DIR);
+    for (std::size_t i = 0; i < targets.size(); ++i) {
+        const auto& target = targets[i];
+
+        std::vector<u8> payload;
+        if (!ExtractZipEntryPayload(zipBytes, target.record, payload, err)) {
+            return false;
+        }
+
+        std::string writeErr;
+        if (!WriteBinaryFile((stagingRoot / target.relativeOutput).string(), payload, writeErr)) {
+            err = writeErr;
+            return false;
+        }
+
+        if (target.isDataJson) {
+            outSummary.dataJsonBytes = std::move(payload);
+        } else {
+            ++outSummary.extractedSprites;
+        }
+
+        if (onProgress) {
+            SpriteAssetDownloader::ProgressInfo info;
+            info.phase = SpriteAssetDownloader::ProgressInfo::Phase::ZipExtract;
+            info.usedZip = true;
+            info.stageCurrent = i + 1;
+            info.stageTotal = targets.size();
+            onProgress(info);
+        }
+    }
+
+    if (outSummary.dataJsonBytes.empty()) {
+        err = "ZIP pack extracted an empty data.json";
+        return false;
+    }
+
+    if (outSummary.extractedSprites == 0) {
+        err = "ZIP pack extracted zero sprites";
+        return false;
+    }
+
+    std::vector<std::string> ignoredMissing;
+    std::size_t ignoredPresent = 0;
+    std::string parseErr;
+    if (!BuildMissingSpriteListFromData(outSummary.dataJsonBytes, ignoredMissing, ignoredPresent, parseErr)) {
+        err = "Extracted data.json is invalid: " + parseErr;
+        return false;
+    }
+
+    return true;
+}
+
+bool CommitStagedAssets(std::string& err) {
+    const auto stagingRoot = std::filesystem::path(SD_ASSETS_STAGING_DIR);
+    const auto stagingData = stagingRoot / "data.json";
+    const auto stagingSprites = stagingRoot / "sprites";
+
+    std::error_code fsErr;
+    if (!std::filesystem::exists(stagingData, fsErr) || fsErr) {
+        err = "Staging data.json is missing";
+        return false;
+    }
+    if (!std::filesystem::exists(stagingSprites, fsErr) || fsErr) {
+        err = "Staging sprites directory is missing";
+        return false;
+    }
+
+    const auto assetsRoot = std::filesystem::path(SD_ASSETS_DIR);
+    const auto liveData = assetsRoot / "data.json";
+    const auto liveSprites = assetsRoot / "sprites";
+
+    const auto backupRoot = std::filesystem::path(SD_ASSETS_BACKUP_DIR);
+    const auto backupData = backupRoot / "data.json";
+    const auto backupSprites = backupRoot / "sprites";
+
+    std::filesystem::remove_all(backupRoot, fsErr);
+    if (fsErr) {
+        err = "Failed clearing backup directory: " + fsErr.message();
+        return false;
+    }
+
+    std::filesystem::create_directories(backupRoot, fsErr);
+    if (fsErr) {
+        err = "Failed creating backup directory: " + fsErr.message();
+        return false;
+    }
+
+    std::filesystem::create_directories(assetsRoot, fsErr);
+    if (fsErr) {
+        err = "Failed creating assets directory: " + fsErr.message();
+        return false;
+    }
+
+    bool movedOldData = false;
+    bool movedOldSprites = false;
+    bool installedNewData = false;
+    bool installedNewSprites = false;
+
+    auto rollback = [&]() {
+        std::error_code rollbackErr;
+
+        if (installedNewData) {
+            std::filesystem::remove(liveData, rollbackErr);
+            rollbackErr.clear();
+        }
+        if (installedNewSprites) {
+            std::filesystem::remove_all(liveSprites, rollbackErr);
+            rollbackErr.clear();
+        }
+
+        if (movedOldData && std::filesystem::exists(backupData, rollbackErr) && !rollbackErr) {
+            std::filesystem::rename(backupData, liveData, rollbackErr);
+            rollbackErr.clear();
+        }
+        if (movedOldSprites && std::filesystem::exists(backupSprites, rollbackErr) && !rollbackErr) {
+            std::filesystem::rename(backupSprites, liveSprites, rollbackErr);
+            rollbackErr.clear();
+        }
+    };
+
+    if (std::filesystem::exists(liveData, fsErr) && !fsErr) {
+        std::filesystem::rename(liveData, backupData, fsErr);
+        if (fsErr) {
+            err = "Failed backing up current data.json: " + fsErr.message();
+            return false;
+        }
+        movedOldData = true;
+    }
+
+    fsErr.clear();
+    if (std::filesystem::exists(liveSprites, fsErr) && !fsErr) {
+        std::filesystem::rename(liveSprites, backupSprites, fsErr);
+        if (fsErr) {
+            rollback();
+            err = "Failed backing up current sprites directory: " + fsErr.message();
+            return false;
+        }
+        movedOldSprites = true;
+    }
+
+    fsErr.clear();
+    std::filesystem::rename(stagingData, liveData, fsErr);
+    if (fsErr) {
+        rollback();
+        err = "Failed installing staged data.json: " + fsErr.message();
+        return false;
+    }
+    installedNewData = true;
+
+    fsErr.clear();
+    std::filesystem::rename(stagingSprites, liveSprites, fsErr);
+    if (fsErr) {
+        rollback();
+        err = "Failed installing staged sprites directory: " + fsErr.message();
+        return false;
+    }
+    installedNewSprites = true;
+
+    std::filesystem::remove_all(stagingRoot, fsErr);
+    fsErr.clear();
+    std::filesystem::remove_all(backupRoot, fsErr);
+    fsErr.clear();
+    std::filesystem::remove(SD_SPRITES_PACK_TEMP, fsErr);
+
+    return true;
+}
+
+ZipPackApplyResult TryApplyZipPack(
+    const std::string& normalizedBase,
+    const std::vector<std::string>& missingCandidates,
+    const std::function<void(const SpriteAssetDownloader::ProgressInfo&)>& onProgress
+) {
+    ZipPackApplyResult result;
+
+    auto cleanupTemporary = []() {
+        std::error_code fsErr;
+        std::filesystem::remove_all(SD_ASSETS_STAGING_DIR, fsErr);
+        fsErr.clear();
+        std::filesystem::remove_all(SD_ASSETS_BACKUP_DIR, fsErr);
+        fsErr.clear();
+        std::filesystem::remove(SD_SPRITES_PACK_TEMP, fsErr);
+    };
+
+    cleanupTemporary();
+
+    ZipPackManifest manifest;
+    std::vector<u8> manifestBytes;
+    bool manifestParsed = false;
+
+    {
+        HttpResponse manifestResp;
+        std::string manifestErr;
+        const std::string manifestUrl = normalizedBase + ZIP_MANIFEST_ENDPOINT;
+        if (HttpGet(manifestUrl, manifestResp, manifestErr) && manifestResp.statusCode == 200 && !manifestResp.body.empty()) {
+            manifestBytes = manifestResp.body;
+            std::string parseErr;
+            if (!ParseZipPackManifest(manifestBytes, manifest, parseErr)) {
+                LOG_WARNING("SpriteAssetDownloader: zip manifest ignored: " + parseErr);
+            } else {
+                manifestParsed = true;
+            }
+        }
+    }
+
+    HttpResponse zipResp;
+    std::string zipErr;
+    const std::string zipUrl = normalizedBase + ZIP_PACK_ENDPOINT;
+    result.attempted = true;
+
+    auto publishDownload = [&](std::size_t received, std::size_t total) {
+        if (!onProgress) {
+            return;
+        }
+        SpriteAssetDownloader::ProgressInfo info;
+        info.phase = SpriteAssetDownloader::ProgressInfo::Phase::ZipDownload;
+        info.usedZip = true;
+        info.stageCurrent = received;
+        info.stageTotal = total;
+        onProgress(info);
+    };
+
+    const bool zipOk = HttpGet(zipUrl, zipResp, zipErr, 0, publishDownload);
+    if (!zipOk || zipResp.statusCode != 200 || zipResp.body.empty()) {
+        if (zipErr.empty()) {
+            result.error = "ZIP download failed (status " + std::to_string(zipResp.statusCode) + ")";
+        } else {
+            result.error = zipErr;
+        }
+        cleanupTemporary();
+        return result;
+    }
+
+    std::string writeErr;
+    if (!WriteBinaryFile(SD_SPRITES_PACK_TEMP, zipResp.body, writeErr)) {
+        result.error = writeErr;
+        cleanupTemporary();
+        return result;
+    }
+
+    if (manifestParsed && manifest.zipSha256.has_value()) {
+        const std::string actualHash = ComputeSha256Hex(zipResp.body);
+        if (actualHash != *manifest.zipSha256) {
+            result.error = "ZIP hash mismatch";
+            cleanupTemporary();
+            return result;
+        }
+    }
+
+    ZipExtractionSummary summary;
+    std::string extractErr;
+    if (!ExtractZipPackToStaging(zipResp.body, onProgress, summary, extractErr)) {
+        result.error = extractErr;
+        cleanupTemporary();
+        return result;
+    }
+
+    if (manifestParsed && manifest.dataJsonSha256.has_value()) {
+        const std::string actualHash = ComputeSha256Hex(summary.dataJsonBytes);
+        if (actualHash != *manifest.dataJsonSha256) {
+            result.error = "Extracted data.json hash mismatch";
+            cleanupTemporary();
+            return result;
+        }
+    }
+
+    if (manifestParsed && manifest.spritesCount.has_value() && *manifest.spritesCount != summary.extractedSprites) {
+        result.error = "Extracted sprites count does not match manifest";
+        cleanupTemporary();
+        return result;
+    }
+
+    std::string commitErr;
+    if (!CommitStagedAssets(commitErr)) {
+        result.error = commitErr;
+        cleanupTemporary();
+        return result;
+    }
+
+    if (!manifestBytes.empty()) {
+        std::string manifestWriteErr;
+        if (!WriteBinaryFile(SD_SPRITES_PACK_MANIFEST, manifestBytes, manifestWriteErr)) {
+            LOG_WARNING("SpriteAssetDownloader: failed to persist zip manifest: " + manifestWriteErr);
+        }
+    }
+
+    const auto spritesRoot = std::filesystem::path(SD_SPRITES_DIR);
+    std::size_t resolved = 0;
+    for (const auto& filename : missingCandidates) {
+        if (FileExistsAndNotEmpty(spritesRoot / filename)) {
+            ++resolved;
+        }
+    }
+
+    result.succeeded = true;
+    result.verified = true;
+    result.resolvedSprites = resolved;
+    return result;
 }
 
 bool BuildMissingSpriteListFromData(
@@ -843,34 +1805,91 @@ SpriteAssetDownloader::SyncResult SpriteAssetDownloader::SyncFromCdn(
     }
 
     result.skippedSprites = locallyPresent + knownMissingSkipped;
-
-    const auto spritesRoot = std::filesystem::path(SD_SPRITES_DIR);
-
     result.totalMissingSprites = retryableMissingSprites.size();
     result.remainingSprites = result.totalMissingSprites;
-
-    auto emitProgress = [&](std::size_t processed) {
-        if (!onProgress) {
-            return;
-        }
-        ProgressInfo info;
-        info.totalMissing = result.totalMissingSprites;
-        info.processed = processed;
-        info.downloaded = result.downloadedSprites;
-        info.failed = result.failedSprites;
-        info.remaining = (info.totalMissing > info.processed) ? (info.totalMissing - info.processed) : 0;
-        onProgress(info);
-    };
-    emitProgress(0);
 
     if (retryableMissingSprites.empty()) {
         LOG_INFO("SpriteAssetDownloader: sync finished (downloaded=0, skipped=" + std::to_string(result.skippedSprites) + ", failed=0, remaining=0)");
         return result;
     }
 
+    std::size_t zipResolvedSprites = 0;
+    const auto zipAttempt = TryApplyZipPack(normalizedBase, retryableMissingSprites, onProgress);
+    if (zipAttempt.attempted) {
+        if (zipAttempt.succeeded) {
+            result.usedZipPack = true;
+            result.zipPackVerified = zipAttempt.verified;
+
+            zipResolvedSprites = std::min(result.totalMissingSprites, zipAttempt.resolvedSprites);
+            result.downloadedSprites += zipResolvedSprites;
+
+            std::error_code fsErr;
+            std::filesystem::remove(SD_KNOWN_MISSING_SPRITES, fsErr);
+            knownMissing.clear();
+
+            std::vector<std::string> remainingAfterZip;
+            remainingAfterZip.reserve(retryableMissingSprites.size());
+
+            const auto spritesRoot = std::filesystem::path(SD_SPRITES_DIR);
+            for (const auto& filename : retryableMissingSprites) {
+                if (!FileExistsAndNotEmpty(spritesRoot / filename)) {
+                    remainingAfterZip.push_back(filename);
+                }
+            }
+            retryableMissingSprites = std::move(remainingAfterZip);
+
+            result.remainingSprites = retryableMissingSprites.size();
+            result.downloadedDataJson = true;
+
+            std::vector<u8> refreshedDataJson;
+            if (ReadBinaryFile(SD_DATA_JSON, refreshedDataJson) && !refreshedDataJson.empty()) {
+                dataJsonBytes = refreshedDataJson;
+                std::lock_guard<std::mutex> lock(dataJsonCacheMutex);
+                cachedDataJsonBytes = dataJsonBytes;
+            }
+
+            if (retryableMissingSprites.empty()) {
+                LOG_INFO("SpriteAssetDownloader: zip sync finished (downloaded=" + std::to_string(result.downloadedSprites) +
+                         ", skipped=" + std::to_string(result.skippedSprites) +
+                         ", failed=0, remaining=0)");
+                return result;
+            }
+
+            result.zipFallbackTriggered = true;
+            LOG_WARNING("SpriteAssetDownloader: zip sync left " + std::to_string(retryableMissingSprites.size()) + " sprites unresolved, falling back to incremental sync");
+        } else {
+            result.zipFallbackTriggered = true;
+            LOG_WARNING("SpriteAssetDownloader: zip sync failed, falling back to incremental sync: " + zipAttempt.error);
+        }
+    }
+
+    const auto spritesRoot = std::filesystem::path(SD_SPRITES_DIR);
+
+    auto emitProgress = [&](std::size_t processedIncremental, std::size_t downloadedIncremental, std::size_t failedIncremental) {
+        if (!onProgress) {
+            return;
+        }
+
+        const std::size_t baseProcessed = zipResolvedSprites;
+
+        ProgressInfo info;
+        info.phase = ProgressInfo::Phase::IncrementalDownload;
+        info.usedZip = result.usedZipPack;
+        info.usingFallback = result.zipFallbackTriggered;
+        info.totalMissing = result.totalMissingSprites;
+        info.processed = std::min(info.totalMissing, baseProcessed + processedIncremental);
+        info.downloaded = std::min(info.totalMissing, zipResolvedSprites + downloadedIncremental);
+        info.failed = failedIncremental;
+        info.remaining = (info.totalMissing > info.processed) ? (info.totalMissing - info.processed) : 0;
+        onProgress(info);
+    };
+    emitProgress(0, 0, 0);
+
     const auto syncStart = std::chrono::steady_clock::now();
     std::size_t attemptedDownloads = 0;
-    std::size_t processedSprites = 0;
+    std::size_t processedIncremental = 0;
+    std::size_t downloadedIncremental = 0;
+    std::size_t failedIncremental = 0;
     std::size_t newlyKnownMissing = 0;
 
     for (const auto& filename : retryableMissingSprites) {
@@ -938,8 +1957,9 @@ SpriteAssetDownloader::SyncResult SpriteAssetDownloader::SyncFromCdn(
             }
 
             ++result.failedSprites;
-            ++processedSprites;
-            emitProgress(processedSprites);
+            ++failedIncremental;
+            ++processedIncremental;
+            emitProgress(processedIncremental, downloadedIncremental, failedIncremental);
             if (result.error.empty()) {
                 if (spriteErr.empty()) {
                     std::ostringstream ss;
@@ -955,8 +1975,9 @@ SpriteAssetDownloader::SyncResult SpriteAssetDownloader::SyncFromCdn(
         std::string writeErr;
         if (!WriteBinaryFile(localPath.string(), spriteResp.body, writeErr)) {
             ++result.failedSprites;
-            ++processedSprites;
-            emitProgress(processedSprites);
+            ++failedIncremental;
+            ++processedIncremental;
+            emitProgress(processedIncremental, downloadedIncremental, failedIncremental);
             if (result.error.empty()) {
                 result.error = writeErr;
             }
@@ -964,8 +1985,9 @@ SpriteAssetDownloader::SyncResult SpriteAssetDownloader::SyncFromCdn(
         }
 
         ++result.downloadedSprites;
-        ++processedSprites;
-        emitProgress(processedSprites);
+        ++downloadedIncremental;
+        ++processedIncremental;
+        emitProgress(processedIncremental, downloadedIncremental, failedIncremental);
     }
 
     if (newlyKnownMissing > 0) {
@@ -977,14 +1999,16 @@ SpriteAssetDownloader::SyncResult SpriteAssetDownloader::SyncFromCdn(
         }
     }
 
-    result.remainingSprites = (result.totalMissingSprites > result.downloadedSprites) ?
-        (result.totalMissingSprites - result.downloadedSprites) :
-        0;
+    result.remainingSprites = (result.totalMissingSprites > result.downloadedSprites)
+        ? (result.totalMissingSprites - result.downloadedSprites)
+        : 0;
 
     LOG_INFO("SpriteAssetDownloader: sync finished (downloaded=" + std::to_string(result.downloadedSprites) +
              ", skipped=" + std::to_string(result.skippedSprites) +
              ", failed=" + std::to_string(result.failedSprites) +
              ", remaining=" + std::to_string(result.remainingSprites) +
+             ", zip=" + std::string(result.usedZipPack ? "true" : "false") +
+             ", fallback=" + std::string(result.zipFallbackTriggered ? "true" : "false") +
              ", budgetReached=" + std::string(result.budgetReached ? "true" : "false") + ")");
 
     return result;

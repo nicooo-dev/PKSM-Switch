@@ -55,6 +55,11 @@ namespace pksm
         std::atomic<std::size_t> spriteSyncDownloaded{0};
         std::atomic<std::size_t> spriteSyncFailed{0};
         std::atomic<std::size_t> spriteSyncRemaining{0};
+        std::atomic<int> spriteSyncPhase{0};
+        std::atomic<std::size_t> spriteSyncStageCurrent{0};
+        std::atomic<std::size_t> spriteSyncStageTotal{0};
+        std::atomic<bool> spriteSyncUsedZip{false};
+        std::atomic<bool> spriteSyncUsedFallback{false};
         std::atomic<std::size_t> spriteSyncNoProgressBatches{0};
         std::atomic<bool> spriteSyncStopRequested{false};
         std::thread spriteSyncWorker;

@@ -6,6 +6,13 @@ ifeq ($(strip $(DEVKITPRO)),)
 $(error "Please set DEVKITPRO in your environment. export DEVKITPRO=<path to>/devkitpro")
 endif
 
+# PowerShell usually provides DEVKITPRO/DEVKITARM with backslashes (C:\devkitPro),
+# but GCC's -specs handling on Windows expects forward slashes.
+DEVKITPRO := $(subst \,/,$(DEVKITPRO))
+ifneq ($(strip $(DEVKITARM)),)
+DEVKITARM := $(subst \,/,$(DEVKITARM))
+endif
+
 TOPDIR ?= $(CURDIR)
 include $(DEVKITPRO)/libnx/switch_rules
 
