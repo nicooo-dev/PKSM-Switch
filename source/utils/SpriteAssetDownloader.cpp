@@ -47,8 +47,8 @@ constexpr const char* SD_KNOWN_MISSING_SPRITES = "sdmc:/switch/PKSM/assets/known
 constexpr const char* ROMFS_DATA_JSON = "romfs:/gfx/data/data.json";
 constexpr const char* POKESPRITE_BASE = "https://cdn.jsdelivr.net/npm/pokesprite-images@2.7.0";
 constexpr const char* POKESPRITE_RAW_BASE = "https://raw.githubusercontent.com/msikma/pokesprite/master";
-constexpr const char* ZIP_PACK_ENDPOINT = "/assets/sprites-pack.zip";
-constexpr const char* ZIP_MANIFEST_ENDPOINT = "/assets/sprites-pack-manifest.json";
+constexpr const char* ZIP_PACK_URL = "https://github.com/Sala01/PKSM-Switch/releases/download/PRE-RELEASE/sprites-pack.zip";
+constexpr const char* ZIP_MANIFEST_URL = "https://github.com/Sala01/PKSM-Switch/releases/download/PRE-RELEASE/sprites-pack-manifest.json";
 
 struct UrlParts {
     bool https = true;
@@ -1515,7 +1515,7 @@ ZipPackApplyResult TryApplyZipPack(
     {
         HttpResponse manifestResp;
         std::string manifestErr;
-        const std::string manifestUrl = normalizedBase + ZIP_MANIFEST_ENDPOINT;
+        const std::string manifestUrl = ZIP_MANIFEST_URL;
         if (HttpGet(manifestUrl, manifestResp, manifestErr) && manifestResp.statusCode == 200 && !manifestResp.body.empty()) {
             manifestBytes = manifestResp.body;
             std::string parseErr;
@@ -1529,7 +1529,7 @@ ZipPackApplyResult TryApplyZipPack(
 
     HttpResponse zipResp;
     std::string zipErr;
-    const std::string zipUrl = normalizedBase + ZIP_PACK_ENDPOINT;
+    const std::string zipUrl = ZIP_PACK_URL;
     result.attempted = true;
 
     auto publishDownload = [&](std::size_t received, std::size_t total) {
@@ -1823,6 +1823,54 @@ SpriteAssetDownloader::SyncResult SpriteAssetDownloader::SyncFromCdn(
     }
 
     std::size_t zipResolvedSprites = 0;
+    const auto zipAttempt = TryApplyZipPack(normalizedBase, retryableMissingSprites, onProgress);
+    if (zipAttempt.attempted) {
+        if (zipAttempt.succeeded) {
+            result.usedZipPack = true;
+            result.zipPackVerified = zipAttempt.verified;
+
+            zipResolvedSprites = std::min(result.totalMissingSprites, zipAttempt.resolvedSprites);
+            result.downloadedSprites += zipResolvedSprites;
+
+            std::error_code fsErr;
+            std::filesystem::remove(SD_KNOWN_MISSING_SPRITES, fsErr);
+            knownMissing.clear();
+
+            std::vector<std::string> remainingAfterZip;
+            remainingAfterZip.reserve(retryableMissingSprites.size());
+
+            const auto spritesRootCheck = std::filesystem::path(SD_SPRITES_DIR);
+            for (const auto& filename : retryableMissingSprites) {
+                if (!FileExistsAndNotEmpty(spritesRootCheck / filename)) {
+                    remainingAfterZip.push_back(filename);
+                }
+            }
+            retryableMissingSprites = std::move(remainingAfterZip);
+
+            result.remainingSprites = retryableMissingSprites.size();
+            result.downloadedDataJson = true;
+
+            std::vector<u8> refreshedDataJson;
+            if (ReadBinaryFile(SD_DATA_JSON, refreshedDataJson) && !refreshedDataJson.empty()) {
+                dataJsonBytes = refreshedDataJson;
+                std::lock_guard<std::mutex> lock(dataJsonCacheMutex);
+                cachedDataJsonBytes = dataJsonBytes;
+            }
+
+            if (retryableMissingSprites.empty()) {
+                LOG_INFO("SpriteAssetDownloader: zip sync finished (downloaded=" + std::to_string(result.downloadedSprites) +
+                         ", skipped=" + std::to_string(result.skippedSprites) +
+                         ", failed=0, remaining=0)");
+                return result;
+            }
+
+            result.zipFallbackTriggered = true;
+            LOG_WARNING("SpriteAssetDownloader: zip sync left " + std::to_string(retryableMissingSprites.size()) + " sprites unresolved, falling back to incremental sync");
+        } else {
+            result.zipFallbackTriggered = true;
+            LOG_WARNING("SpriteAssetDownloader: zip sync failed, falling back to incremental sync: " + zipAttempt.error);
+        }
+    }
 
     const auto spritesRoot = std::filesystem::path(SD_SPRITES_DIR);
 
