@@ -66,7 +66,12 @@ public:
     pu::i32 GetX() override;
     pu::i32 GetY() override;
     pu::i32 GetWidth() override { return CalculateDefaultGridWidth(); }
-    pu::i32 GetHeight() override { return CalculateDefaultGridHeight(); }
+    // Use the fixed numberOfRows rather than dynamic item count so that height is stable
+    // before any box data is loaded (avoids size_t underflow when items is empty).
+    pu::i32 GetHeight() override {
+        if (numberOfRows <= 0) return 0;
+        return (itemSize * numberOfRows) + (GRID_SPACING * (numberOfRows - 1));
+    }
     void OnRender(pu::ui::render::Renderer::Ref& drawer, const pu::i32 x, const pu::i32 y) override;
     void
     OnInput(const u64 keys_down, const u64 keys_up, const u64 keys_held, const pu::ui::TouchPoint touch_pos) override;

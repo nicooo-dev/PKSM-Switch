@@ -11,3 +11,6 @@ PKSM.lst
 
 # my internal tools
 /tools/
+dist/
+*.nro
+*.elf

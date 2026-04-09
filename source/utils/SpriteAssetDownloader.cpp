@@ -45,7 +45,8 @@ constexpr const char* SD_SPRITES_PACK_MANIFEST = "sdmc:/switch/PKSM/assets/sprit
 constexpr const char* SD_SPRITES_DIR = "sdmc:/switch/PKSM/assets/sprites";
 constexpr const char* SD_KNOWN_MISSING_SPRITES = "sdmc:/switch/PKSM/assets/known_missing_sprites.txt";
 constexpr const char* ROMFS_DATA_JSON = "romfs:/gfx/data/data.json";
-constexpr const char* POKESPRITE_BASE = "https://raw.githubusercontent.com/msikma/pokesprite/master";
+constexpr const char* POKESPRITE_BASE = "https://cdn.jsdelivr.net/npm/pokesprite-images@2.7.0";
+constexpr const char* POKESPRITE_RAW_BASE = "https://raw.githubusercontent.com/msikma/pokesprite/master";
 constexpr const char* ZIP_PACK_ENDPOINT = "/assets/sprites-pack.zip";
 constexpr const char* ZIP_MANIFEST_ENDPOINT = "/assets/sprites-pack-manifest.json";
 
@@ -739,7 +740,7 @@ std::string NormalizeCdnBase(const std::string& raw) {
     return out;
 }
 
-std::optional<std::string> BuildPokespriteFallbackUrl(const std::string& filename) {
+std::optional<std::string> BuildPokespriteUrlFromBase(const char* base, const std::string& filename) {
     if (!EndsWith(filename, ".png")) {
         return std::nullopt;
     }
@@ -757,7 +758,15 @@ std::optional<std::string> BuildPokespriteFallbackUrl(const std::string& filenam
     }
 
     const std::string folder = shiny ? "shiny" : "regular";
-    return std::string(POKESPRITE_BASE) + "/pokemon-gen8/" + folder + "/" + baseName;
+    return std::string(base) + "/pokemon-gen8/" + folder + "/" + baseName;
+}
+
+std::optional<std::string> BuildPokespriteFallbackUrl(const std::string& filename) {
+    return BuildPokespriteUrlFromBase(POKESPRITE_BASE, filename);
+}
+
+std::optional<std::string> BuildPokespriteRawFallbackUrl(const std::string& filename) {
+    return BuildPokespriteUrlFromBase(POKESPRITE_RAW_BASE, filename);
 }
 
 bool FileExistsAndNotEmpty(const std::filesystem::path& p) {
@@ -1814,54 +1823,6 @@ SpriteAssetDownloader::SyncResult SpriteAssetDownloader::SyncFromCdn(
     }
 
     std::size_t zipResolvedSprites = 0;
-    const auto zipAttempt = TryApplyZipPack(normalizedBase, retryableMissingSprites, onProgress);
-    if (zipAttempt.attempted) {
-        if (zipAttempt.succeeded) {
-            result.usedZipPack = true;
-            result.zipPackVerified = zipAttempt.verified;
-
-            zipResolvedSprites = std::min(result.totalMissingSprites, zipAttempt.resolvedSprites);
-            result.downloadedSprites += zipResolvedSprites;
-
-            std::error_code fsErr;
-            std::filesystem::remove(SD_KNOWN_MISSING_SPRITES, fsErr);
-            knownMissing.clear();
-
-            std::vector<std::string> remainingAfterZip;
-            remainingAfterZip.reserve(retryableMissingSprites.size());
-
-            const auto spritesRoot = std::filesystem::path(SD_SPRITES_DIR);
-            for (const auto& filename : retryableMissingSprites) {
-                if (!FileExistsAndNotEmpty(spritesRoot / filename)) {
-                    remainingAfterZip.push_back(filename);
-                }
-            }
-            retryableMissingSprites = std::move(remainingAfterZip);
-
-            result.remainingSprites = retryableMissingSprites.size();
-            result.downloadedDataJson = true;
-
-            std::vector<u8> refreshedDataJson;
-            if (ReadBinaryFile(SD_DATA_JSON, refreshedDataJson) && !refreshedDataJson.empty()) {
-                dataJsonBytes = refreshedDataJson;
-                std::lock_guard<std::mutex> lock(dataJsonCacheMutex);
-                cachedDataJsonBytes = dataJsonBytes;
-            }
-
-            if (retryableMissingSprites.empty()) {
-                LOG_INFO("SpriteAssetDownloader: zip sync finished (downloaded=" + std::to_string(result.downloadedSprites) +
-                         ", skipped=" + std::to_string(result.skippedSprites) +
-                         ", failed=0, remaining=0)");
-                return result;
-            }
-
-            result.zipFallbackTriggered = true;
-            LOG_WARNING("SpriteAssetDownloader: zip sync left " + std::to_string(retryableMissingSprites.size()) + " sprites unresolved, falling back to incremental sync");
-        } else {
-            result.zipFallbackTriggered = true;
-            LOG_WARNING("SpriteAssetDownloader: zip sync failed, falling back to incremental sync: " + zipAttempt.error);
-        }
-    }
 
     const auto spritesRoot = std::filesystem::path(SD_SPRITES_DIR);
 
@@ -1912,7 +1873,8 @@ SpriteAssetDownloader::SyncResult SpriteAssetDownloader::SyncFromCdn(
 
         const auto localPath = spritesRoot / filename;
 
-        const std::string spriteUrl = normalizedBase + "/assets/sprites/" + filename;
+        // Primary: jsDelivr CDN (pokesprite-images npm package)
+        const auto primaryUrl = BuildPokespriteFallbackUrl(filename);
         HttpResponse spriteResp;
         std::string spriteErr;
         int primaryStatus = 0;
@@ -1920,12 +1882,15 @@ SpriteAssetDownloader::SyncResult SpriteAssetDownloader::SyncFromCdn(
         bool fallbackAttempted = false;
 
         bool downloaded = false;
-        if (HttpGet(spriteUrl, spriteResp, spriteErr) && spriteResp.statusCode == 200 && !spriteResp.body.empty()) {
+        if (primaryUrl.has_value() && HttpGet(*primaryUrl, spriteResp, spriteErr) && spriteResp.statusCode == 200 && !spriteResp.body.empty()) {
             downloaded = true;
             primaryStatus = spriteResp.statusCode;
         } else {
-            primaryStatus = spriteResp.statusCode;
-            const auto fallbackUrl = BuildPokespriteFallbackUrl(filename);
+            if (primaryUrl.has_value()) {
+                primaryStatus = spriteResp.statusCode;
+            }
+            // Fallback: raw.githubusercontent.com
+            const auto fallbackUrl = BuildPokespriteRawFallbackUrl(filename);
             if (fallbackUrl.has_value()) {
                 fallbackAttempted = true;
                 HttpResponse fallbackResp;

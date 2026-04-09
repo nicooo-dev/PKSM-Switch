@@ -196,6 +196,9 @@ public:
         // Calculate number of rows needed
         size_t numberOfRows = CalculateNumberOfRows(itemCount);
 
+        // Guard against underflow: size_t(0) - 1 wraps to SIZE_MAX
+        if (numberOfRows == 0) return 0;
+
         // Height = (number of rows * item height) + ((number of rows - 1) * spacing)
         return (GetItemHeight() * static_cast<pu::i32>(numberOfRows)) +
             (GetVerticalSpacing() * static_cast<pu::i32>(numberOfRows - 1));

@@ -211,6 +211,14 @@ void PokemonBox::UpdateMaskTexture() {
     pu::i32 width = GetWidth();
     pu::i32 height = GetHeight();
 
+    if (width <= 0 || height <= 0) {
+        LOG_ERROR(
+            "UpdateMaskTexture: invalid dimensions " + std::to_string(width) + "x" + std::to_string(height) +
+            ", skipping"
+        );
+        return;
+    }
+
     // Calculate grid dimensions and position
     pu::i32 gridWidth = boxGrid->GetWidth();
     pu::i32 gridHeight = boxGrid->GetHeight();
